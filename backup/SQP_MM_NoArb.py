@@ -16,7 +16,8 @@ class MomentMatchingSQP:
 
     def _objective(self, y):
         p = y[:self.num_scenarios]
-        x = y[self.num_scenarios:]
+        nu = y[self.num_scenarios:2*self.num_scenarios]
+        x = y[2*self.num_scenarios:]
         x_matrix = x.reshape((self.num_azioni, self.num_scenarios))
         tree_mean = mean(x_matrix, p)
         tree_std = std(x_matrix, p)
@@ -28,12 +29,26 @@ class MomentMatchingSQP:
     
     def _constraint(self, y):
         p = y[:self.num_scenarios]
-        return np.sum(p) - 1
+        nu = y[self.num_scenarios:2*self.num_scenarios]
+        x = y[2*self.num_scenarios:]
+        x_matrix = x.reshape((self.num_azioni, self.num_scenarios))
+        constraints = []
+        constraints.append(np.sum(p) - 1)
+        for i in range(self.num_azioni):
+            constr_sum = 0
+            for s in range(self.num_scenarios):
+                constr_sum+= nu[s]*(1 + x_matrix[i,s])
+
+            constraints.append(constr_sum - 1)
+
+        return constraints
     
     def gen_initsol(self):
         initial_solution_parts = []
         p_init = 1 / self.num_scenarios * np.ones(self.num_scenarios)
         initial_solution_parts.append(p_init)
+        nu_init = 1 / self.num_scenarios * np.ones(self.num_scenarios)
+        initial_solution_parts.append(nu_init)
         for a in range(self.num_azioni):
             part = np.abs(np.random.normal(loc=self.exp_mean[a], scale=self.exp_std[a], size=self.num_scenarios))
             initial_solution_parts.append(part)
@@ -43,9 +58,11 @@ class MomentMatchingSQP:
     
     def solve(self, initial_solution):
         # Define bounds
-        bounds_p= [(0, np.inf)] * ( self.num_scenarios)  # Limiti per p e nu
+        # Define bounds
+        bounds_p_nu = [(0, np.inf)] * (2 * self.num_scenarios)  # Limiti per p e nu
         bounds_x = [(None, None)] * (self.num_azioni * self.num_scenarios)  # Nessun limite per x
-        bounds = bounds_p + bounds_x
+        bounds = bounds_p_nu + bounds_x
+
 
         # Define constraints
         constraints = [{'type': 'eq', 'fun': self._constraint}]
@@ -53,7 +70,7 @@ class MomentMatchingSQP:
         # Running optimization
         res = optimize.minimize(self._objective, initial_solution, method='SLSQP', bounds=bounds, constraints=constraints, options={'maxiter': 1000})
         p_res = res.x[:self.num_scenarios]
-        x_res = res.x[self.num_scenarios:]
+        nu_res = res.x[self.num_scenarios:2*self.num_scenarios]
+        x_res = res.x[2*self.num_scenarios:]
         x_mat = x_res.reshape((self.num_azioni, self.num_scenarios))
-        return p_res, x_mat, res.fun
-    
+        return p_res, x_mat, nu_res

@@ -3,6 +3,7 @@ import logging
 import os
 from momentmatching_SQP import MomentMatchingSQP
 from calculatemoments import mean, std, skewness, kurtosis, correlation
+from checkarbitrage import check_arbitrage_prices
 
 log_name = os.path.join(
         '.', 'logs',
@@ -28,41 +29,36 @@ exp_cor = [[1, 0.6, -0.20, -0.10],
            [-0.20, -0.30, 1, 0.60],
            [-0.10, -0.20, -0.60, 1]]
 
-# Initialize problem
-problem = MomentMatchingSQP(num_azioni, num_scenarios, exp_mean, exp_std, exp_skew, exp_kur, exp_cor)
+arb = True
+counter = 0
+while arb and (counter < 100):
+    problem = MomentMatchingSQP(num_azioni, num_scenarios, exp_mean, exp_std, exp_skew, exp_kur, exp_cor)
+    initial_solution = problem.gen_initsol()
+    [p_res, x_mat] = problem.solve(initial_solution)
+    # Check arbitrage
+    arb = check_arbitrage_prices(x_mat)
+    
+if counter >= 100:
+    raise RuntimeError("Arbitrage-free scenarios not found")
+else:
+    print(f"solution found in {counter} iterations")
 
-initial_solution_parts = []
-p_init = 1 / num_scenarios * np.ones(num_scenarios)
-initial_solution_parts.append(p_init)
-for a in range(num_azioni):
-    part = np.abs(np.random.normal(loc=exp_mean[a], scale=exp_std[a], size=num_scenarios))
-    initial_solution_parts.append(part)
-                
-initial_solution = np.concatenate(initial_solution_parts)
+    # Evaluate solution
+    m = mean(x_mat, p_res)
+    dev = std(x_mat, p_res)
+    sk = skewness(x_mat, p_res)
+    k = kurtosis(x_mat, p_res)
+    cor = correlation(x_mat, p_res)
+    logging.info(f"Resulting probabilities:\n{p_res}")
+    logging.info(f"Prices:\n{x_mat}")
+    logging.info(f"Effective mean:\n{m}")
+    logging.info(f"Expected mean - effective mean:\n{exp_mean-m}")
+    logging.info(f"Effective Std:\n{dev}")
+    logging.info(f"Expected std - effective std:\n{exp_std-dev}")
+    logging.info(f"Effective Skewness:\n{sk}")
+    logging.info(f"Expected skew - effective skew:\n{exp_skew-sk}")
+    logging.info(f"Effective Kurtosis:\n{k}")
+    logging.info(f"Expected kurt - effective kurt:\n{exp_kur-k}")
+    logging.info(f"Effective Correlation:\n{cor}")
+    logging.info(f"Expected cor - effective cor:\n{exp_cor-cor}")
 
-solution = problem.solve(initial_solution)
-
-funvalue = solution.fun
-logging.info(f"Optimal objective function value: {funvalue}")
-p_res = solution.x[:num_scenarios]
-x_res = solution.x[num_scenarios:]
-x_mat = x_res.reshape((num_azioni, num_scenarios))
-
-# Evaluate solution
-m = mean(x_mat, p_res)
-dev = std(x_mat, p_res)
-sk = skewness(x_mat, p_res)
-k = kurtosis(x_mat, p_res)
-cor = correlation(x_mat, p_res)
-logging.info(f"Resulting probabilities:\n{p_res}")
-logging.info(f"Prices:\n{x_mat}")
-logging.info(f"Effective mean:\n{m}")
-logging.info(f"Expected mean - effective mean:\n{exp_mean-m}")
-logging.info(f"Effective Std:\n{dev}")
-logging.info(f"Expected std - effective std:\n{exp_std-dev}")
-logging.info(f"Effective Skewness:\n{sk}")
-logging.info(f"Expected skew - effective skew:\n{exp_skew-sk}")
-logging.info(f"Effective Kurtosis:\n{k}")
-logging.info(f"Expected kurt - effective kurt:\n{exp_kur-k}")
-logging.info(f"Effective Correlation:\n{cor}")
-logging.info(f"Expected cor - effective cor:\n{exp_cor-cor}")

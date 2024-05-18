@@ -1,5 +1,5 @@
 import numpy as np
-from checkarbitrage import check_arbitrage_prices
+from scenario_tree.momentmatching.checkarbitrage import check_arbitrage_prices
 
 # Prima prova: modello binomiale con r=0.05, u=0.15, d=0.08.
 act1 = np.array([1, 5])

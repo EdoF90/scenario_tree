@@ -1,5 +1,6 @@
-from .scenario_tree import Test
-
+from .scenTree import Test
+from .momentmatching import momentmatching_SQP
 __all__ = [
     "Test",
+    "momentmatching_SQP"
 ]
