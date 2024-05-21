@@ -1,5 +1,5 @@
-from .scenarioTree import Test
-from .momentmatching import momentmatching_SQP
+from .scenarioTree import ScenarioTree
+from .momentMatching import MomentMatching
 
 
 __all__ = [
