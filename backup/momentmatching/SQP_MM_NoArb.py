@@ -68,7 +68,7 @@ class MomentMatchingSQP:
         constraints = [{'type': 'eq', 'fun': self._constraint}]
 
         # Running optimization
-        res = optimize.minimize(self._objective, initial_solution, method='SLSQP', bounds=bounds, constraints=constraints, options={'maxiter': 1000})
+        res = optimize.minimize(self._objective, initial_solution, method='SLSQP', bounds=bounds, constraints=constraints, options={'maxiter': 5000})
         p_res = res.x[:self.num_scenarios]
         nu_res = res.x[self.num_scenarios:2*self.num_scenarios]
         x_res = res.x[2*self.num_scenarios:]
