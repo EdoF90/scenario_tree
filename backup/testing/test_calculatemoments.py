@@ -1,5 +1,5 @@
 import numpy as np
-from scenario_tree.momentmatching.calculatemoments import mean, std, skewness, kurtosis, correlation
+from scenario_tree.calculatemoments import mean, std, skewness, kurtosis, correlation
 
 '''
 Little example with 2 assets and 3 scenarios to test calculating moments functions

@@ -1,7 +1,7 @@
 import numpy as np
 import scipy
 from scipy import optimize
-from .calculatemoments import mean, std, skewness, kurtosis, correlation
+from ..calculatemoments import mean, std, skewness, kurtosis, correlation
 
 
 class MomentMatchingSQP:

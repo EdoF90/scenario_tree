@@ -2,8 +2,8 @@ from .stochModel import StochModel
 import numpy as np
 import scipy
 from scipy import optimize
-from scenario_tree.momentmatching.calculatemoments import mean, std, skewness, kurtosis, correlation
-from scenario_tree.momentmatching.checkarbitrage import check_arbitrage_prices
+from .calculatemoments import mean, std, skewness, kurtosis, correlation
+from .checkarbitrage import check_arbitrage_prices
 
 class MomentMatching(StochModel):
 
@@ -29,7 +29,7 @@ class MomentMatching(StochModel):
             if i < 2:
                 self.exp_mean[i] =  self.MRF[i] * self.MRL[i] + (1-self.MRF[i]) * parent_node[i]
             else:
-                self.exp_mean[i] = self.exp_mean[0] + self.RP[i] * self.exp_std[i]
+                self.exp_mean[i] = self.exp_mean[0] + self.RP[i-2] * self.exp_std[i]
         
     
     def get_n_children(self, n_children):
@@ -84,8 +84,8 @@ class MomentMatching(StochModel):
 
     def simulate_one_time_step(self, n_children, parent_node, period):
         if period > 1:
-            self.exp_mean = self.update_expectedmean(parent_node)
-            self.exp_std = self.update_expectedstd(parent_node)
+            self.update_expectedmean(parent_node)
+            self.update_expectedstd(parent_node)
         
         self.get_n_children(n_children)
         arb = True

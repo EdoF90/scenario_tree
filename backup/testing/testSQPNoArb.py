@@ -1,9 +1,9 @@
 import numpy as np
 import logging
 import os
-from scenario_tree.backup.SQP_MM_NoArb import MomentMatchingSQP
-from scenario_tree.momentmatching.calculatemoments import mean, std, skewness, kurtosis, correlation
-from scenario_tree.momentmatching.checkarbitrage import check_arbitrage_prices
+from scenario_tree.backup.momentmatching.SQP_MM_NoArb import MomentMatchingSQP
+from scenario_tree.calculatemoments import mean, std, skewness, kurtosis, correlation
+from scenario_tree.checkarbitrage import check_arbitrage_prices
 
 log_name = os.path.join(
         '.', 'logs',
