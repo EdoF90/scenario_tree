@@ -1,0 +1,8 @@
+{
+    "initial_share_prices": [102.05, 107.19, 242.92],
+    "initial_liquidity": 1000,
+    "risk_free_return": 0.000158,
+    "trans_cost_v": 0.0001,
+    "trans_cost_a": 0.0007,
+    "tickers": ["META", "GOOGL", "AMZN"]
+}

@@ -8,7 +8,9 @@ class StochModel():
     @abstractmethod
     def __init__(self, sim_setting):
         self.initial_share_price = sim_setting['initial_share_prices']
-        self.n_shares = sim_setting['n_shares']
+        self.tickers = sim_setting['tickers']
+        #self.n_shares = sim_setting['n_shares']
+        self.n_shares = len(self.tickers)
         self.risk_free_return = sim_setting['risk_free_return']
         self.trans_cost_v = sim_setting['trans_cost_v']
         self.trans_cost_a = sim_setting['trans_cost_a']
