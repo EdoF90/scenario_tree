@@ -1,9 +1,9 @@
 import numpy as np
 import gurobipy as grb
 
-def check_arbitrage_prices(new_prices, prev_prices):
-    num_scenarios = new_prices.shape[1]
-    num_assets = new_prices.shape[0]
+def check_arbitrage_prices(returns):
+    num_scenarios = returns.shape[1]
+    num_assets = returns.shape[0]
     
     model = grb.Model()
     model.setParam('OutputFlag', 0)
@@ -13,7 +13,7 @@ def check_arbitrage_prices(new_prices, prev_prices):
     
     for k in range(num_assets):
         model.addConstr(
-            grb.quicksum(pi[n] * new_prices[k,n] for n in range(num_scenarios)) == prev_prices[k],
+            grb.quicksum(pi[n] * (1+returns[k,n]) for n in range(num_scenarios)) == 1,
             f"eq1_{k}"
         )
     

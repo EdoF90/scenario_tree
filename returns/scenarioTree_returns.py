@@ -1,9 +1,9 @@
-from .stochModel import StochModel
+from ..stochModel import StochModel
 import os
 import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
-from .stochModel import StochModel
+from ..stochModel import StochModel
 from networkx.drawing.nx_pydot import graphviz_layout
 import logging
 import os
@@ -166,7 +166,11 @@ class ScenarioTree(nx.DiGraph):
         '''
         It returns a new period of the tree with correpsonding probabilities
         '''
-        prob, prices = self.stoch_model.simulate_one_time_step(n_scenarios, parent_node, (len(self.nodes_time)-1))
+        prob, returns = self.stoch_model.simulate_one_time_step(n_scenarios, parent_node, (len(self.nodes_time)-1))
+        prices = np.zeros((len(parent_node), n_scenarios))
+        for i in range(len(parent_node)):
+            for s in range(n_scenarios):
+                prices[i,s] = parent_node[i] * (1+returns[i,s])
 
         return prob, prices
     
@@ -185,5 +189,3 @@ class ScenarioTree(nx.DiGraph):
                 )
             )
             plt.close()
-
-

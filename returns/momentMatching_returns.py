@@ -1,16 +1,16 @@
 import yfinance as yf
-from .stochModel import StochModel
+from ..stochModel import StochModel
 import numpy as np
 from scipy import stats
 from scipy import optimize
-from .calculatemoments import mean, std, skewness, kurtosis, correlation
-from .checkarbitrage import check_arbitrage_prices
+from ..calculatemoments import mean, std, skewness, kurtosis, correlation
+from .checkarbitrage_returns import check_arbitrage_prices
 import logging
 import os
 
 log_name = os.path.join(
         '.', 'logs',
-        f"momentMatching.log"
+        f"momentMatching_returns.log"
     )
 logging.basicConfig(
         filename=log_name,
@@ -24,31 +24,18 @@ class MomentMatching(StochModel):
 
     def __init__(self, sim_setting):
         super().__init__(sim_setting)
-        '''
-        self.VC = sim_setting['volatilityclumping']
-        self.MRF = sim_setting['meanreversionfactor']
-        self.MRL = sim_setting['meanreversionfactor']
-        self.RP = sim_setting['risk_premium']
-        self.exp_mean = sim_setting['expectedmean']
-        self.exp_std = sim_setting['expectedstd']
-        self.exp_skew = sim_setting['expectedskewness']
-        self.exp_kur = sim_setting['expectedkurtosis']
-        self.exp_cor = sim_setting['expectedcorrelation']
-        '''
         self.n_children = 0
-        self.parent_node = []
         self.ExpectedMomentsEstimate()
     
     def ExpectedMomentsEstimate(self):
         data = yf.download(self.tickers, start='2023-05-01', end='2024-05-01')['Adj Close']
-        hist_prices = data.dropna()
-        #returns = data.pct_change().dropna()
+        returns = data.pct_change().dropna()
 
-        self.exp_mean = hist_prices.mean().values
-        self.exp_std = hist_prices.std().values
-        self.exp_skew = hist_prices.apply(lambda x: stats.skew(x, bias=False)).values
-        self.exp_kur = hist_prices.apply(lambda x: stats.kurtosis(x, bias=False, fisher=False)).values
-        self.exp_cor = hist_prices.corr().values
+        self.exp_mean = returns.mean().values
+        self.exp_std = returns.std().values
+        self.exp_skew = returns.apply(lambda x: stats.skew(x, bias=False)).values
+        self.exp_kur = returns.apply(lambda x: stats.kurtosis(x, bias=False, fisher=False)).values
+        self.exp_cor = returns.corr().values
     
     '''
     def update_expectedstd(self, parent_node):
@@ -61,15 +48,10 @@ class MomentMatching(StochModel):
     '''
     def get_n_children(self, n_children):
         self.n_children = n_children
-
-    def get_parent_node(self, parent_node):
-        self.parent_node = []
-        self.parent_node = parent_node
     
     def _objective(self, y):
         p = y[:self.n_children]
-        nu = y[self.n_children:2*self.n_children]
-        x = y[2*self.n_children:]
+        x = y[self.n_children:]
         x_matrix = x.reshape((self.n_shares, self.n_children))
         tree_mean = mean(x_matrix, p)
         tree_std = std(x_matrix, p)
@@ -84,18 +66,7 @@ class MomentMatching(StochModel):
     
     def _constraint(self, y):
         p = y[:self.n_children]
-        nu = y[self.n_children:2*self.n_children]
-        x = y[2*self.n_children:]
-        x_matrix = x.reshape((self.n_shares, self.n_children))
-        constraints=[]
-        constraints.append(np.sum(p) - 1)
-        mart_expvalue = np.zeros(self.n_shares)
-        for i in range(self.n_shares):
-            for s in range(self.n_children):
-                mart_expvalue[i] += nu[s] * x_matrix[i,s]
-            constraints.append(mart_expvalue[i]-self.parent_node[i])
-
-        return constraints
+        return np.sum(p) - 1
     
     
     def solve(self):
@@ -103,8 +74,6 @@ class MomentMatching(StochModel):
         initial_solution_parts = []
         p_init = (1 / self.n_children) * np.ones(self.n_children)
         initial_solution_parts.append(p_init)
-        nu_init = (1 / self.n_children) * np.ones(self.n_children)
-        initial_solution_parts.append(nu_init)
         for a in range(self.n_shares):
             part = np.abs(np.random.normal(loc=self.exp_mean[a], scale=self.exp_std[a], size=self.n_children))
             initial_solution_parts.append(part)
@@ -112,23 +81,20 @@ class MomentMatching(StochModel):
         initial_solution = np.concatenate(initial_solution_parts)
 
         # Define bounds
-        '''
         bounds_p= [(0, np.inf)] * (self.n_children) 
         bounds_x = [(None, None)] * (self.n_shares * self.n_children)
         bounds = bounds_p + bounds_x
-        '''
-        bounds = [(0, np.inf)]*(self.n_children*(2+self.n_shares))
+        
 
         # Define constraints
         constraints = [{'type': 'eq', 'fun': self._constraint}]
 
         # Running optimization
-        res = optimize.minimize(self._objective, initial_solution, method='SLSQP', bounds=bounds, constraints=constraints, options={'maxiter': 10000})
+        res = optimize.minimize(self._objective, initial_solution, method='SLSQP', bounds=bounds, constraints=constraints, options={'maxiter': 5000})
         p_res = res.x[:self.n_children]
-        nu_res = res.x[self.n_children:2*self.n_children]
-        x_res = res.x[2*self.n_children:]
+        x_res = res.x[self.n_children:]
         x_mat = x_res.reshape((self.n_shares, self.n_children))
-        return p_res, x_mat, nu_res, res.fun
+        return p_res, x_mat, res.fun
 
     def simulate_one_time_step(self, n_children, parent_node, period):
         '''
@@ -137,19 +103,18 @@ class MomentMatching(StochModel):
             self.update_expectedmean(parent_node)
         '''        
         self.get_n_children(n_children)
-        self.get_parent_node(parent_node)
         arb = True
         counter = 0
         while arb and (counter < 100):
-            probs, prices, martprob, fun = self.solve()
+            probs, returns, fun = self.solve()
             counter += 1
-            arb = check_arbitrage_prices(prices, parent_node)
-            if (arb == False) and (fun<10):
-                tree_mean = mean(prices, probs)
-                tree_std = std(prices, probs)
-                tree_skew = skewness(prices, probs)
-                tree_kurt = kurtosis(prices, probs)
-                tree_cor = correlation(prices, probs)
+            arb = check_arbitrage_prices(returns)
+            if arb == False:
+                tree_mean = mean(returns, probs)
+                tree_std = std(returns, probs)
+                tree_skew = skewness(returns, probs)
+                tree_kurt = kurtosis(returns, probs)
+                tree_cor = correlation(returns, probs)
                 logging.info(f"No arbitrage solution found after {counter} iteration(s)")
                 logging.info(f"Objective function value: {fun}")
                 logging.info(f"Expected vs Generated Moments:")
@@ -160,9 +125,9 @@ class MomentMatching(StochModel):
                 logging.info(f"Correlation: Expected = {self.exp_cor}, Generated = {tree_cor}, Exp-Gen = {self.exp_cor - tree_cor}")
 
         if counter >= 100:
-            raise RuntimeError("Good quality arbitrage-free scenarios not found")
+            raise RuntimeError("Arbitrage-free scenarios not found")
         else:
-            return probs, prices
+            return probs, returns
                 
     #TODO: Need to properly define this function
     def simulate_all_horizon(self, time_horizon):
