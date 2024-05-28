@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from .stochModel import StochModel
 
 class BrownianMotion(StochModel):

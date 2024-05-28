@@ -1,24 +1,13 @@
-import yfinance as yf
-from .stochModel import StochModel
+# -*- coding: utf-8 -*-
+import logging
 import numpy as np
+import yfinance as yf
 from scipy import stats
 from scipy import optimize
-from .calculatemoments import mean, std, skewness, kurtosis, correlation
+from .stochModel import StochModel
 from .checkarbitrage import check_arbitrage_prices
-import logging
-import os
+from .calculatemoments import mean, std, skewness, kurtosis, correlation
 
-log_name = os.path.join(
-        '.', 'logs',
-        f"momentMatching.log"
-    )
-logging.basicConfig(
-        filename=log_name,
-        format='%(asctime)s %(levelname)s: %(message)s',
-        level=logging.INFO,
-        datefmt="%H:%M:%S",
-        filemode='w'
-    )
 
 class MomentMatching(StochModel):
 
@@ -35,19 +24,30 @@ class MomentMatching(StochModel):
         self.exp_kur = sim_setting['expectedkurtosis']
         self.exp_cor = sim_setting['expectedcorrelation']
         '''
-        self.n_children = 0
-        self.parent_node = []
-        self.ExpectedMomentsEstimate()
+        self.n_children = 0 # commentare ??
+        self.parent_node = [] # commentare ??
+        # self.risk_premium = sim_setting['risk_premium']
+        self.ExpectedMomentsEstimate(
+            sim_setting['start'],
+            sim_setting['end']
+        )
     
-    def ExpectedMomentsEstimate(self):
-        data = yf.download(self.tickers, start='2023-05-01', end='2024-05-01')['Adj Close']
+    def ExpectedMomentsEstimate(self, start, end):
+        data = yf.download(
+            self.tickers,
+            start= start,#'2023-05-01',
+            end= end#'2024-05-01'
+        )['Adj Close']
         hist_prices = data.dropna()
         #returns = data.pct_change().dropna()
-
         self.exp_mean = hist_prices.mean().values
         self.exp_std = hist_prices.std().values
-        self.exp_skew = hist_prices.apply(lambda x: stats.skew(x, bias=False)).values
-        self.exp_kur = hist_prices.apply(lambda x: stats.kurtosis(x, bias=False, fisher=False)).values
+        self.exp_skew = hist_prices.apply(
+            lambda x: stats.skew(x, bias=False)
+        ).values
+        self.exp_kur = hist_prices.apply(
+            lambda x: stats.kurtosis(x, bias=False, fisher=False)
+        ).values
         self.exp_cor = hist_prices.corr().values
     
     '''
@@ -59,14 +59,15 @@ class MomentMatching(StochModel):
         for i in range(self.n_shares):
             self.exp_mean[i] = self.risk_free_return + self.RP[i] * self.exp_std[i]
     '''
-    def get_n_children(self, n_children):
+    def set_n_children(self, n_children):
         self.n_children = n_children
 
-    def get_parent_node(self, parent_node):
+    def set_parent_node(self, parent_node):
         self.parent_node = []
         self.parent_node = parent_node
     
     def _objective(self, y):
+    # def _objective(y, n_children, ):
         p = y[:self.n_children]
         nu = y[self.n_children:2*self.n_children]
         x = y[2*self.n_children:]
@@ -76,9 +77,13 @@ class MomentMatching(StochModel):
         tree_skew = skewness(x_matrix, p)
         tree_kurt = kurtosis(x_matrix, p)
         tree_cor = correlation(x_matrix, p)
-        sqdiff = (np.linalg.norm(self.exp_mean - tree_mean, 2) + np.linalg.norm(self.exp_std - tree_std, 2) + 
-                np.linalg.norm(self.exp_skew - tree_skew, 2) + np.linalg.norm(self.exp_kur - tree_kurt, 2) +
-                np.linalg.norm(self.exp_cor - tree_cor, 1))
+        sqdiff = (
+            np.linalg.norm(self.exp_mean - tree_mean, 2) +
+            np.linalg.norm(self.exp_std - tree_std, 2) + 
+            np.linalg.norm(self.exp_skew - tree_skew, 2) +
+            np.linalg.norm(self.exp_kur - tree_kurt, 2) +
+            np.linalg.norm(self.exp_cor - tree_cor, 1)
+        )
         
         return sqdiff
     
@@ -88,15 +93,14 @@ class MomentMatching(StochModel):
         x = y[2*self.n_children:]
         x_matrix = x.reshape((self.n_shares, self.n_children))
         constraints=[]
+        # prob sum to one
         constraints.append(np.sum(p) - 1)
         mart_expvalue = np.zeros(self.n_shares)
         for i in range(self.n_shares):
             for s in range(self.n_children):
                 mart_expvalue[i] += nu[s] * x_matrix[i,s]
             constraints.append(mart_expvalue[i]-self.parent_node[i])
-
         return constraints
-    
     
     def solve(self):
         # Define initial solution
@@ -122,22 +126,34 @@ class MomentMatching(StochModel):
         # Define constraints
         constraints = [{'type': 'eq', 'fun': self._constraint}]
 
+        # tmp = lambda x: _objective(x, self.n_children, 6)
         # Running optimization
-        res = optimize.minimize(self._objective, initial_solution, method='SLSQP', bounds=bounds, constraints=constraints, options={'maxiter': 10000})
+        res = optimize.minimize(
+            self._objective,
+            initial_solution,
+            method='SLSQP',
+            bounds=bounds,
+            constraints=constraints,
+            options={
+                'maxiter': 10000
+            }
+        )
         p_res = res.x[:self.n_children]
         nu_res = res.x[self.n_children:2*self.n_children]
         x_res = res.x[2*self.n_children:]
         x_mat = x_res.reshape((self.n_shares, self.n_children))
         return p_res, x_mat, nu_res, res.fun
 
-    def simulate_one_time_step(self, n_children, parent_node, period):
+    # TODO: pensare gestione processo non stazionario
+    def simulate_one_time_step(self, n_children, parent_node):
         '''
-        if period > 1:
+        if parent_node.t > 1:
+            self.risk_premium
             self.update_expectedstd(parent_node)
             self.update_expectedmean(parent_node)
         '''        
-        self.get_n_children(n_children)
-        self.get_parent_node(parent_node)
+        self.set_n_children(n_children)
+        self.set_parent_node(parent_node)
         arb = True
         counter = 0
         while arb and (counter < 100):
@@ -166,5 +182,4 @@ class MomentMatching(StochModel):
                 
     #TODO: Need to properly define this function
     def simulate_all_horizon(self, time_horizon):
-
         return 0

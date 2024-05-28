@@ -1,24 +1,12 @@
-from .stochModel import StochModel
+# -*- coding: utf-8 -*-
 import os
+import logging
 import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
 from .stochModel import StochModel
 from networkx.drawing.nx_pydot import graphviz_layout
-import logging
-import os
 
-log_name = os.path.join(
-        '.', 'logs',
-        f"{os.path.basename(__file__)[:-3]}.log"
-    )
-logging.basicConfig(
-        filename=log_name,
-        format='%(asctime)s %(levelname)s: %(message)s',
-        level=logging.INFO,
-        datefmt="%H:%M:%S",
-        filemode='w'
-    )
 
 def prod(val):  
     res = 1 
@@ -166,8 +154,11 @@ class ScenarioTree(nx.DiGraph):
         '''
         It returns a new period of the tree with correpsonding probabilities
         '''
-        prob, prices = self.stoch_model.simulate_one_time_step(n_scenarios, parent_node, (len(self.nodes_time)-1))
-
+        prob, prices = self.stoch_model.simulate_one_time_step(
+            n_scenarios,
+            parent_node,
+            (len(self.nodes_time)-1)
+        )
         return prob, prices
     
     def plot_all_scenarios(self):
@@ -185,5 +176,3 @@ class ScenarioTree(nx.DiGraph):
                 )
             )
             plt.close()
-
-
