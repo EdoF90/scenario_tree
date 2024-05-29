@@ -13,17 +13,6 @@ class MomentMatching(StochModel):
 
     def __init__(self, sim_setting):
         super().__init__(sim_setting)
-        '''
-        self.VC = sim_setting['volatilityclumping']
-        self.MRF = sim_setting['meanreversionfactor']
-        self.MRL = sim_setting['meanreversionfactor']
-        self.RP = sim_setting['risk_premium']
-        self.exp_mean = sim_setting['expectedmean']
-        self.exp_std = sim_setting['expectedstd']
-        self.exp_skew = sim_setting['expectedskewness']
-        self.exp_kur = sim_setting['expectedkurtosis']
-        self.exp_cor = sim_setting['expectedcorrelation']
-        '''
         self.n_children = 0 # commentare ??
         self.parent_node = [] # commentare ??
         # self.risk_premium = sim_setting['risk_premium']
@@ -116,11 +105,6 @@ class MomentMatching(StochModel):
         initial_solution = np.concatenate(initial_solution_parts)
 
         # Define bounds
-        '''
-        bounds_p= [(0, np.inf)] * (self.n_children) 
-        bounds_x = [(None, None)] * (self.n_shares * self.n_children)
-        bounds = bounds_p + bounds_x
-        '''
         bounds = [(0, np.inf)]*(self.n_children*(2+self.n_shares))
 
         # Define constraints
