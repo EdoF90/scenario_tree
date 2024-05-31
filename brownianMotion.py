@@ -4,56 +4,64 @@ import yfinance as yf
 from scipy import stats
 import numpy as np
 from numpy import random
-#To complete
+from .checkarbitrage import check_arbitrage_prices
+import logging
+
 class BrownianMotion(StochModel):
 
     def __init__(self, sim_setting):
         super().__init__(sim_setting)
-        self.mu = sim_setting["mu"]
-        self.sigma = sim_setting["sigma"]
-        self.dt = sim_setting["dt"]
+        self.dt = 1
+        self.estimate_from_data(
+            sim_setting["start"],
+            sim_setting["end"]
+        )
 
-    def ExpectedMomentsEstimate(self, start, end):
-        data = yf.download(
+    def estimate_from_data(self, start, end):
+        hist_prices = yf.download(
             self.tickers,
-            start= start,#'2023-05-01',
-            end= end#'2024-05-01'
+            start = start,
+            end = end
         )['Adj Close']
-        returns = data.pct_change().dropna()
-        self.exp_mean = returns.mean().values
-        self.exp_std = returns.std().values
-        self.exp_skew = returns.apply(
-            lambda x: stats.skew(x, bias=False)
-        ).values
-        self.exp_kur = returns.apply(
-            lambda x: stats.kurtosis(x, bias=False, fisher=False)
-        ).values
-        self.exp_cor = returns.corr().values
+        log_returns = np.log(hist_prices / hist_prices.shift(1)).dropna()
+        self.mu = log_returns.mean().values
+        self.sigma = log_returns.std().values
+        self.corr = log_returns.corr().values
 
     def simulate_one_time_step(self, n_children, parent_node):
-        if self.n_shares > 1:
-            B = random.multivariate_normal(
-                mean = np.zeros(self.n_underlyings),
-                cov  = self.rho,
-                size = n_children,
-                ).T    
-        else: 
-            B = random.normal(loc = 0, scale = 1, size=n_children)
+        arb = True
+        counter = 0
+        while (arb == True) and (counter<100):
+            counter += 1
+            if self.n_shares > 1:
+                B = random.multivariate_normal(
+                    mean = np.zeros(self.n_shares),
+                    cov  = self.corr,
+                    size = n_children,
+                    ).T    
+            else: 
+                B = random.normal(loc = 0, scale = 1, size=n_children)
         
-        Y = np.array(self.sigma).reshape(-1,1) * np.sqrt(self.dt) * B
-        c = self.mu - 0.5 * self.sigma**2
-        Increment = np.array(c).reshape(-1,1) * self.dt + Y
+            Y = np.array(self.sigma).reshape(-1,1) * np.sqrt(self.dt) * B
+            c = self.mu - 0.5 * self.sigma**2
+            Increment = np.array(c).reshape(-1,1) * self.dt + Y
 
-        #TODO to complete
-        prices[1:n_u+1, :] = parent_node[1:n_u+1].reshape(-1,1) * np.exp( Inc )
+            prices = np.zeros((self.n_shares, n_children))
+            for i in range(self.n_shares):
+                for s in range(n_children):
+                    prices[i,s] = parent_node[i] * np.exp(Increment[i,s]) 
 
-
-        return prices
-
+            arb = check_arbitrage_prices(prices, parent_node)
+            if (arb == False):
+                logging.info(f"No arbitrage solution found after {counter} iteration(s)")
+            
+        if counter >= 100:
+            raise RuntimeError(f"No arbitrage solution NOT found after {counter} iteration(s)")
+        else:
+            probs = 1/n_children * np.ones(n_children)
+            return probs, prices
+    '''
     def generate_states(self):
-        '''
-        Generate children states by pure MC simulation.
-        '''
         size = (self.branching_factor,)  #((self.n_underlyings, self.branching_factor))
         if self.dynamics == 'BS':
             if self.n_shares > 1:
@@ -76,3 +84,4 @@ class BrownianMotion(StochModel):
         Inc = np.array(c).reshape(-1,1) * self.dt + Y
         n_u = self.n_underlyings
         self.next_states[1:n_u+1, :] = self.current_state[1:n_u+1].reshape(-1,1) * np.exp( Inc )
+        '''
