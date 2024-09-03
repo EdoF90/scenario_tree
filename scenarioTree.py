@@ -46,7 +46,7 @@ class ScenarioTree(nx.DiGraph):
             self.nodes_time.append([])
             self.filtration.append([])
             for parent_node in last_added_nodes:
-                p, x = self._generate_one_time_step(self.branching_factors[i], self._node[parent_node]['prices'])
+                p, x = self._generate_one_time_step(self.branching_factors[i], self._node[parent_node]['prices'], depth-i) # TODO:ALE E IONNY HANNO AGGIUNTO UN INPUT
                 for j in range(self.branching_factors[i]):
                     id_new_node = count
                     self.add_node(
@@ -150,13 +150,14 @@ class ScenarioTree(nx.DiGraph):
         else:
             plt.show()
 
-    def _generate_one_time_step(self, n_scenarios, parent_node):
+    def _generate_one_time_step(self, n_scenarios, parent_node, remaining_times): #TODO ALE E IONNY HANNO AGGIUNTO UN INPUT
         '''
         It returns a new period of the tree with correpsonding probabilities
         '''
         prob, prices = self.stoch_model.simulate_one_time_step(
             n_scenarios,
             parent_node,
+            remaining_times, #TODO ALE E IONNY HANNO AGGIUNTO QUESTO INPUT
         )
         return prob, prices
     
