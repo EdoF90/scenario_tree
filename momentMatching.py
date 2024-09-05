@@ -1,4 +1,5 @@
 import logging
+import time
 import numpy as np
 import yfinance as yf
 from scipy import stats
@@ -23,8 +24,10 @@ class MomentMatching(StochModel):
             self.tickers, 
             start=start,
             end=end
-            )['Adj Close']
-        log_returns = np.log(hist_prices / hist_prices.shift(1)).dropna()
+            )['Close']
+        monthly_prices = hist_prices.resample('ME').last()
+        log_returns = np.log(monthly_prices / monthly_prices.shift(1)).dropna()
+        #log_returns = np.log(hist_prices / hist_prices.shift(1)).dropna()
 
         self.exp_mean = log_returns.mean().values
         self.exp_std = log_returns.std().values
@@ -81,13 +84,16 @@ class MomentMatching(StochModel):
         initial_solution = np.concatenate(initial_solution_parts)
 
         # Define bounds
-        bounds_p= [(1e-3, np.inf)] * (self.n_children)
+        bounds_p= [(0.01, 0.4)] * (self.n_children)
+        '''
         mean_bound = np.mean(self.exp_mean)
         std_bound = np.max(self.exp_std)
         lb = mean_bound - 3*std_bound
         ub = mean_bound + 3*std_bound
         bounds_x = [(lb, ub)] * (self.n_shares * self.n_children)
-        # bounds_x = [(None, None)] * (self.n_shares * self.n_children)
+        '''
+        bounds_x = [(None, None)] * (self.n_shares * self.n_children)
+
         bounds = bounds_p + bounds_x
         
 
@@ -110,7 +116,10 @@ class MomentMatching(StochModel):
         self.set_n_children(n_children)
         arb = True
         counter = 0
-        while arb and (counter < 100):
+        flag = True
+        startt = time.time()
+        while flag and (counter < 100):
+            logging.info(f"iter={counter+1}")
             counter += 1
             probs, returns, fun = self.solve()
             prices = np.zeros((len(parent_node), n_children))
@@ -118,7 +127,8 @@ class MomentMatching(StochModel):
                 for s in range(n_children):
                     prices[i,s] = parent_node[i] * np.exp(returns[i,s])
             arb = check_arbitrage_prices(prices, parent_node)
-            if (arb == False) and (fun <= 5):
+            if (arb == False) and (fun <= 1):
+                flag = False
                 tree_mean = mean(returns, probs)
                 tree_std = std(returns, probs)
                 tree_skew = skewness(returns, probs)
@@ -136,6 +146,8 @@ class MomentMatching(StochModel):
         if counter >= 100:
             raise RuntimeError("Good quality arbitrage-free scenarios not found")
         else:
+            endt = time.time()
+            logging.info(f"Computational time to build the tree:{endt - startt} seconds")
             return probs, prices
                 
     #TODO: Need to properly define this function

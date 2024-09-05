@@ -23,7 +23,9 @@ class BrownianMotion(StochModel):
             start = start,
             end = end
         )['Adj Close']
-        log_returns = np.log(hist_prices / hist_prices.shift(1)).dropna()
+        monthly_prices = hist_prices.resample('ME').first()
+        log_returns = np.log(monthly_prices / monthly_prices.shift(1)).dropna()
+        #log_returns = np.log(hist_prices / hist_prices.shift(1)).dropna()
         self.mu = log_returns.mean().values
         self.sigma = log_returns.std().values
         self.corr = log_returns.corr().values
@@ -31,7 +33,7 @@ class BrownianMotion(StochModel):
     def simulate_one_time_step(self, n_children, parent_node):
         arb = True
         counter = 0
-        while (arb == True) and (counter<100):
+        while (arb == True) and (counter<500):
             counter += 1
             if self.n_shares > 1:
                 B = random.multivariate_normal(
@@ -55,7 +57,7 @@ class BrownianMotion(StochModel):
             if (arb == False):
                 logging.info(f"No arbitrage solution found after {counter} iteration(s)")
             
-        if counter >= 100:
+        if counter >= 500:
             raise RuntimeError(f"No arbitrage solution NOT found after {counter} iteration(s)")
         else:
             probs = 1/n_children * np.ones(n_children)

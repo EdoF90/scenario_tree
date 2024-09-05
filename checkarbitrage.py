@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import numpy as np
 import gurobipy as grb
+import logging
 
 def check_arbitrage_prices(new_prices, prev_prices):
     num_scenarios = new_prices.shape[1]
@@ -25,4 +26,5 @@ def check_arbitrage_prices(new_prices, prev_prices):
     if model.status == grb.GRB.Status.OPTIMAL:
         return False # Il sistema ha una soluzione, quindi non c'è arbitraggio
     else:
+        logging.info("Arbitrage opportunity in the solution")
         return True # Il sistema non ha una soluzione, quindi c'è arbitraggio

@@ -113,13 +113,14 @@ class ScenarioTree(nx.DiGraph):
         _, ax = plt.subplots(figsize=(20, 12))
         x = np.zeros(self.n_nodes)
         y = np.zeros(self.n_nodes)
-        x_spacing = 20
-        y_spacing = 1000
+        x_spacing = 15
+        y_spacing = 200000
         for time in self.nodes_time:
             for node in time:
+                prices_str = ', '.join([f"{price:.2f}" for price in self.nodes[node]['prices']])
                 ax.text(
-                    x[node], y[node], str(node), ha='center',
-                    va='center', bbox=dict(
+                    x[node], y[node], f"[{prices_str}]", 
+                    ha='center', va='center', bbox=dict(
                         facecolor='white',
                         edgecolor='black'
                     )
@@ -131,6 +132,13 @@ class ScenarioTree(nx.DiGraph):
                         x[child] = x[node] + x_spacing
                         y[child] = y[node] + y_spacing * (0.5 * len(children) - iter) + 0.5 * y_spacing
                         ax.plot([x[node], x[child]], [y[node], y[child]], '-k')
+                        prob = self.nodes[child]['prob']
+                        ax.text(
+                            (x[node] + x[child]) / 2, (y[node] + y[child]) / 2,
+                            f"prob={prob:.2f}",
+                            ha='center', va='center',
+                            bbox=dict(facecolor='yellow', edgecolor='black')
+                        )                        
                         iter += 1
                 
                 else:
@@ -139,10 +147,17 @@ class ScenarioTree(nx.DiGraph):
                         x[child] = x[node] + x_spacing
                         y[child] = y[node] + y_spacing * ((len(children)//2) - iter)
                         ax.plot([x[node], x[child]], [y[node], y[child]], '-k')
+                        prob = self.nodes[child]['prob']
+                        ax.text(
+                            (x[node] + x[child]) / 2, (y[node] + y[child]) / 2,
+                            f"prob={prob:.2f}",
+                            ha='center', va='center',
+                        bbox=dict(facecolor='yellow', edgecolor='black')
+                        )                        
                         iter += 1
-            y_spacing = y_spacing * 0.3
+            y_spacing = y_spacing * 0.25
 
-        plt.title(self.name)
+        #plt.title(self.name)
         plt.axis('off')
         if file_path:
             plt.savefig(file_path)
