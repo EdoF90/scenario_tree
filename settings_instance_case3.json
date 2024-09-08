@@ -1,0 +1,8 @@
+{
+    "initial_share_prices": [118.27, 59.35, 61.77, 164.64, 175.00],
+    "risk_free_return": 0.01,
+    "initial_liquidity": 1000,
+    "trans_cost_v": 0.005,
+    "trans_cost_a": 0.005
+
+}

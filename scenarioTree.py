@@ -6,7 +6,7 @@ import networkx as nx
 import matplotlib.pyplot as plt
 from .stochModel import StochModel
 from networkx.drawing.nx_pydot import graphviz_layout
-
+import time
 
 def prod(val):  
     res = 1 
@@ -18,35 +18,39 @@ def prod(val):
 class ScenarioTree(nx.DiGraph):
     def __init__(self, name: str, branching_factors: list, len_vector: int, initial_share_price, stoch_model: StochModel):
         nx.DiGraph.__init__(self)
+        starttimer = time.time()
         self.starting_node = 0
-        self.len_vector = len_vector
-        self.stoch_model = stoch_model
+        self.len_vector = len_vector # number of shares available in the market
+        self.stoch_model = stoch_model # stochastic model used to generate the tree
         self.add_node(
             self.starting_node,
             prices=initial_share_price,
             prob=1,
             id=0,
             stage=0
-        )        
+        ) # add the node 0     
         self.name = name
         self.filtration = []
-
         self.branching_factors = branching_factors
         depth = len(branching_factors)
-
         self.n_scenarios = prod(self.branching_factors)
-
         self.nodes_time = []
         self.nodes_time.append([self.starting_node])
 
+        # Build the tree
         count = 1
         last_added_nodes = [self.starting_node]
+        # Main loop: until the time horizon is reached
         for i in range(depth):
             next_level = []
             self.nodes_time.append([])
             self.filtration.append([])
+            
+            # For each node of the last generated period add its children through the StochModel class
             for parent_node in last_added_nodes:
-                p, x = self._generate_one_time_step(self.branching_factors[i], self._node[parent_node]['prices'], depth-i) # TODO:ALE E IONNY HANNO AGGIUNTO UN INPUT
+                # Probabilities and prices are given by the stochastic model chosen (MM or GBM)
+                p, x = self._generate_one_time_step(self.branching_factors[i], self._node[parent_node]['prices']) # TODO:ALE E IONNY HANNO AGGIUNTO UN INPUT: depth-i
+                # Add all the generated nodes to the tree
                 for j in range(self.branching_factors[i]):
                     id_new_node = count
                     self.add_node(
@@ -64,6 +68,11 @@ class ScenarioTree(nx.DiGraph):
             self.n_nodes = count
         self.leaves = last_added_nodes
 
+        endtimer = time.time()
+        logging.info(f"Computational time to generate the entire tree:{endtimer-starttimer} seconds")
+    
+    '''
+    NOT USED METHODS
     def get_filtration_time(self, t):
         return self.filtration[t]
 
@@ -108,7 +117,8 @@ class ScenarioTree(nx.DiGraph):
                 str_values = ",".join([f"{ele}" for ele in y[share,:]])
                 f.write(f"{leaf},{share},{str_values}\n")
         f.close()
-
+    '''
+    # Method to plot the tree
     def plot(self, file_path=None):
         _, ax = plt.subplots(figsize=(20, 12))
         x = np.zeros(self.n_nodes)
@@ -165,17 +175,16 @@ class ScenarioTree(nx.DiGraph):
         else:
             plt.show()
 
-    def _generate_one_time_step(self, n_scenarios, parent_node, remaining_times): #TODO ALE E IONNY HANNO AGGIUNTO UN INPUT
-        '''
-        It returns a new period of the tree with correpsonding probabilities
-        '''
+    def _generate_one_time_step(self, n_scenarios, parent_node): #TODO ALE E IONNY HANNO AGGIUNTO UN INPUT: remaining_times
+        # Given a parent node and the number of children to generate, it returns the children with corresponding probabilities
         prob, prices = self.stoch_model.simulate_one_time_step(
             n_scenarios,
-            parent_node,
-            remaining_times, #TODO ALE E IONNY HANNO AGGIUNTO QUESTO INPUT
+            parent_node #TODO ALE E IONNY HANNO AGGIUNTO QUESTO INPUT: remaining_times
         )
         return prob, prices
     
+    '''
+    NOT USED METHOD
     def plot_all_scenarios(self):
         for leaf in self.leaves:    
             y = self.get_history_node(leaf)
@@ -191,3 +200,4 @@ class ScenarioTree(nx.DiGraph):
                 )
             )
             plt.close()
+    '''

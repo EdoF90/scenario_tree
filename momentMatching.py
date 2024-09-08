@@ -9,15 +9,16 @@ from .checkarbitrage import check_arbitrage_prices
 from .calculatemoments import mean, std, skewness, kurtosis, correlation
 
 
-class MomentMatching(StochModel):
+class MomentMatching(StochModel): # Instance of the abstract class StochModel
 
     def __init__(self, sim_setting):
         super().__init__(sim_setting)
-        self.n_children = 0
+        self.n_children = 0 # number of children to generate
+
         self.ExpectedMomentsEstimate(
-            start = sim_setting["start"],
-            end = sim_setting["end"]
-        )
+            start = self.start_date,
+            end = self.end_date
+        ) # definition of the expected moments to match
     
     def ExpectedMomentsEstimate(self, start, end):
         hist_prices = yf.download(
@@ -27,7 +28,6 @@ class MomentMatching(StochModel):
             )['Close']
         monthly_prices = hist_prices.resample('ME').last()
         log_returns = np.log(monthly_prices / monthly_prices.shift(1)).dropna()
-        #log_returns = np.log(hist_prices / hist_prices.shift(1)).dropna()
 
         self.exp_mean = log_returns.mean().values
         self.exp_std = log_returns.std().values
@@ -39,27 +39,22 @@ class MomentMatching(StochModel):
             ).values
         self.exp_cor = log_returns.corr().values
     
-    '''
-    def update_expectedstd(self, parent_node):
-        for i in range(self.n_shares):
-            self.exp_std[i] = self.VC[i] * abs(parent_node[i] - self.exp_mean[i]) + (1-self.VC[i]) * (self.exp_std[i])
-    
-    def update_expectedmean(self, parent_node):
-        for i in range(self.n_shares):
-            self.exp_mean[i] = self.risk_free_return + self.RP[i] * self.exp_std[i]
-    '''
-    def set_n_children(self, n_children):
+    def set_n_children(self, n_children): # set the number of children to generate
         self.n_children = n_children
     
-    def _objective(self, y):
-        p = y[:self.n_children]
-        x = y[self.n_children:]
-        x_matrix = x.reshape((self.n_shares, self.n_children))
+    def _objective(self, y): # objective function of the MM model
+        # y is the vector of decision variables: the first n_children entries are node proabilities, the remaining are log-returns
+        p = y[:self.n_children] # probabilities
+        x = y[self.n_children:] # log-returns
+        x_matrix = x.reshape((self.n_shares, self.n_children)) # log-returns in matrix form (row: shares - column: scenario)
+        # Following lines calculate the statistical moments of the tree
         tree_mean = mean(x_matrix, p)
-        tree_std = std(x_matrix, p)
+        tree_std = std(x_matrix, p) 
         tree_skew = skewness(x_matrix, p)
         tree_kurt = kurtosis(x_matrix, p)
         tree_cor = correlation(x_matrix, p)
+
+        # The objective function is the squared difference among the expexted moments and the moments underlying the generated tree
         sqdiff = (np.linalg.norm(self.exp_mean - tree_mean, 2) + np.linalg.norm(self.exp_std - tree_std, 2) + 
                 np.linalg.norm(self.exp_skew - tree_skew, 2) + np.linalg.norm(self.exp_kur - tree_kurt, 2) +
                 np.linalg.norm(self.exp_cor - tree_cor, 1))
@@ -73,7 +68,7 @@ class MomentMatching(StochModel):
         return np.sum(p) - 1
     
     def solve(self):
-        # Define initial solution
+        # Define initial solution: equal proabibilities for each node, log-returns sampled from a Normal distribution
         initial_solution_parts = []
         p_init = (1 / self.n_children) * np.ones(self.n_children)
         initial_solution_parts.append(p_init)
@@ -84,7 +79,7 @@ class MomentMatching(StochModel):
         initial_solution = np.concatenate(initial_solution_parts)
 
         # Define bounds
-        bounds_p= [(0.01, 0.4)] * (self.n_children)
+        bounds_p= [(0.05, 0.4)] * (self.n_children) # bounds for probabilities to avoid vanishing probabilities
         '''
         mean_bound = np.mean(self.exp_mean)
         std_bound = np.max(self.exp_std)
@@ -92,7 +87,7 @@ class MomentMatching(StochModel):
         ub = mean_bound + 3*std_bound
         bounds_x = [(lb, ub)] * (self.n_shares * self.n_children)
         '''
-        bounds_x = [(None, None)] * (self.n_shares * self.n_children)
+        bounds_x = [(None, None)] * (self.n_shares * self.n_children) # No bounds for log-returns, if you want to bound them uncomment lines 84-88
 
         bounds = bounds_p + bounds_x
         
@@ -108,25 +103,29 @@ class MomentMatching(StochModel):
         return p_res, x_mat, res.fun
 
     def simulate_one_time_step(self, n_children, parent_node):
-        '''
-        if period > 1:
-            self.update_expectedstd(parent_node)
-            self.update_expectedmean(parent_node)
-        '''        
-        self.set_n_children(n_children)
+        self.set_n_children(n_children) # set the number of nodes to generate
+        # Inizialization
         arb = True
         counter = 0
         flag = True
         startt = time.time()
+
+        # Main loop: keeps solving the MM model until an arbitrage-free good quality solution is found (or until the maximum number of iterations is reached)
         while flag and (counter < 100):
-            logging.info(f"iter={counter+1}")
             counter += 1
-            probs, returns, fun = self.solve()
+
+            probs, returns, fun = self.solve() # solve the MM model
+
+            # Get prices from returns
             prices = np.zeros((len(parent_node), n_children))
             for i in range(len(parent_node)):
                 for s in range(n_children):
                     prices[i,s] = parent_node[i] * np.exp(returns[i,s])
+            
+            # Check if there is an arbitrage opportunity
             arb = check_arbitrage_prices(prices, parent_node)
+
+            # If an arbitrage-free and good quality solution is found, then log some info, add the generated nodes to the tree and break the loop
             if (arb == False) and (fun <= 1):
                 flag = False
                 tree_mean = mean(returns, probs)
@@ -144,13 +143,16 @@ class MomentMatching(StochModel):
                 logging.info(f"Correlation: Expected = {self.exp_cor}, Generated = {tree_cor}, Exp-Gen = {self.exp_cor - tree_cor}")
 
         if counter >= 100:
-            raise RuntimeError("Good quality arbitrage-free scenarios not found")
+            raise RuntimeError("Good quality arbitrage-free scenarios not found after 100 attempts")
         else:
             endt = time.time()
             logging.info(f"Computational time to build the tree:{endt - startt} seconds")
-            return probs, prices
-                
+            return probs, prices # return probababilities and prices to add nodes to the tree
+    
+    '''
+    NOT USED
     #TODO: Need to properly define this function
     def simulate_all_horizon(self, time_horizon):
 
         return 0
+    '''

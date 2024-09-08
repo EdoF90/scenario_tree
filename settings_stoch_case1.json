@@ -1,7 +1,5 @@
 {
     "start": "2023-05-01",
     "end": "2024-05-01",
-    "initial_share_prices": [164.45 , 175.00],
-    "risk_free_return": 0.01,
     "tickers": ["GOOG", "AMZN"]
 }
