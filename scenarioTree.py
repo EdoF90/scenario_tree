@@ -49,7 +49,7 @@ class ScenarioTree(nx.DiGraph):
             # For each node of the last generated period add its children through the StochModel class
             for parent_node in last_added_nodes:
                 # Probabilities and prices are given by the stochastic model chosen (MM or GBM)
-                p, x = self._generate_one_time_step(self.branching_factors[i], self._node[parent_node]['prices']) # TODO:ALE E IONNY HANNO AGGIUNTO UN INPUT: depth-i
+                p, x = self._generate_one_time_step(self.branching_factors[i], self._node[parent_node]['prices'], depth-i) # TODO: added input depth-i (corresponds to remaining_times)
                 # Add all the generated nodes to the tree
                 for j in range(self.branching_factors[i]):
                     id_new_node = count
@@ -175,11 +175,12 @@ class ScenarioTree(nx.DiGraph):
         else:
             plt.show()
 
-    def _generate_one_time_step(self, n_scenarios, parent_node): #TODO ALE E IONNY HANNO AGGIUNTO UN INPUT: remaining_times
+    def _generate_one_time_step(self, n_scenarios, parent_node, remaining_times): #TODO: added input remaining_times
         # Given a parent node and the number of children to generate, it returns the children with corresponding probabilities
         prob, prices = self.stoch_model.simulate_one_time_step(
             n_scenarios,
-            parent_node #TODO ALE E IONNY HANNO AGGIUNTO QUESTO INPUT: remaining_times
+            parent_node,
+            remaining_times # TODO: added input remaining_times
         )
         return prob, prices
     
