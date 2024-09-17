@@ -7,13 +7,21 @@ from .checkarbitrage import check_arbitrage_prices
 import logging
 
 class BrownianMotionForHedging(StochModel):
+    ''' BrownianMotionForHedging: stochastic model used to simulate stock price dynamics 
+        uder the Geometric Brownian Motion model.
+        simulate_one_time_step: for each parent node in scenario tree, it generates children 
+        nodes by computing new asset values and the probabilities of each new node.
+        Stock prices following Geometric Brownian Motion are generated until a no arbitrage 
+        setting is found. If the market is arbitrage free, option prices (using Black and Scholes formula)
+        and cash new values are computed.
+    '''
 
     def __init__(self, 
                  sim_setting, 
                  option_list, 
                  dt, mu, 
                  sigma, rho, 
-                 rnd_state): # sim_setting is not used
+                 rnd_state): 
         
         super().__init__(sim_setting)
         self.dt = dt 
@@ -36,8 +44,8 @@ class BrownianMotionForHedging(StochModel):
         # Simulate stock prices until no-arbitarge is found:
         while (arb == True) and (counter<100):
             counter += 1
-            #In simulations settings: 
-            # S(t+dt) = S(t) * exp(mu - 1/2*sigma**2) * dt + sigma * sqrt(dt) * Z
+            # In simulations settings (Geometric Brownian Motion): 
+            # S(t+dt) = S(t) * exp((mu - 1/2*sigma**2) * dt + sigma * sqrt(dt) * Z)
             # where Z is a standard normal distribution
             if self.n_shares > 1:
                 B = self.rnd_state.multivariate_normal(
@@ -64,7 +72,7 @@ class BrownianMotionForHedging(StochModel):
         if counter >= 100:
             raise RuntimeError(f"No arbitrage solution NOT found after {counter} iteration(s)")
         else:
-            probs = 1/n_children * np.ones(n_children) # uniform probabilities ? 
+            probs = 1/n_children * np.ones(n_children) #TODO: uniform probabilities ? 
         
         # Options values
         option_prices = np.zeros((self.n_options, n_children))
