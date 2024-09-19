@@ -5,6 +5,8 @@ from scipy import stats
 import numpy as np
 from .checkarbitrage import check_arbitrage_prices
 import logging
+import gurobipy as gp
+from gurobipy import GRB
 
 class BrownianMotionForHedging(StochModel):
     ''' BrownianMotionForHedging: stochastic model used to simulate stock price dynamics 
@@ -72,8 +74,9 @@ class BrownianMotionForHedging(StochModel):
         if counter >= 100:
             raise RuntimeError(f"No arbitrage solution NOT found after {counter} iteration(s)")
         else:
-            probs = 1/n_children * np.ones(n_children) #TODO: uniform probabilities ? 
-        
+            # probs = 1/n_children * np.ones(n_children) #TODO: uniform probabilities ? 
+            probs = self.compute_probabilities(n_children, parent_stock_prices, stock_prices)
+
         # Options values
         option_prices = np.zeros((self.n_options, n_children))
         for j in range(self.n_shares):
@@ -88,3 +91,59 @@ class BrownianMotionForHedging(StochModel):
         prices = np.vstack((cash_price, stock_prices, option_prices))
         
         return probs, prices
+    
+
+    def compute_probabilities(self, n_children, parent_stock_prices, stock_prices):
+        '''
+        Compute the vector of probabilities, associated to the next nodes,
+        that best approximate the continuous process, according to the generated states.
+        This is obtained via moment matching (only 1st and 2nd by now).
+        Refer to Hoyland (2001) for a similar method.
+        '''
+        M = gp.Model("Get probabilities that best approximate the continuous process")
+        p = []
+        for i in range(n_children):
+            p.append(M.addVar(lb=0, ub=1, vtype=GRB.CONTINUOUS, name='p'+str(i+1)))
+        M.addConstr(np.sum(p) == 1, name='sum=1')
+        
+        Diff1 = np.zeros(0)
+        Diff2 = np.zeros(0)
+        for j in range(self.n_shares):
+            true_moment1 = self.moments(dynamics='BS', number=1, underlying_index=j)
+            popu_moment1 = np.log(stock_prices[j,:] / parent_stock_prices[j]) @ np.array(p)
+            diff1 = (true_moment1 - popu_moment1)**2
+            true_moment2 = self.moments(dynamics='BS', number=2, underlying_index=j)
+            popu_moment2 = np.log(stock_prices[j,:] / parent_stock_prices[j])**2 @ np.array(p)
+            diff2 = (true_moment2 - popu_moment2)**2
+            Diff1 = np.hstack((Diff1, diff1))
+            Diff2 = np.hstack((Diff1, diff2))
+        
+        M.setObjective(np.sum(Diff1) + np.sum(Diff2) , GRB.MINIMIZE)
+        M.Params.LogToConsole = 0  # ...avoid printing all info with m.optimize()
+        M.optimize()
+        probabilities = np.zeros(n_children)
+        for i in range(n_children):
+            probabilities[i] = M.getVars()[i].X
+
+        return probabilities
+        '''
+        WARNING --> the above moment matching involves only marginal moments. To change.
+        '''
+    
+    
+    def moments(self, dynamics: str, number: int, underlying_index: int):
+        '''
+        Get the exact moment (number=1,2,...) of a certain dynamics (e.g., VG).
+        '''
+        j = underlying_index
+
+        if dynamics == 'BS':
+            if number == 1: moment = self.mu[j] * self.dt - 1/2 * self.sigma**2 * self.dt #TODO: is it correct?
+            if number == 2: moment = self.sigma[j]**2 * self.dt + (self.mu[j] * self.dt)**2
+        
+        if dynamics == 'VG':
+            if number == 1: moment = self.mu[j] * self.dt
+            if number == 2: moment = (self.sigma[j]**2 + self.mu[j]**2 * self.nu[j]) * self.dt + (self.mu[j] * self.dt)**2
+        
+        return moment
+    
