@@ -1,0 +1,9 @@
+{
+    "start": "2023-05-01",
+    "end": "2024-05-01",
+        "tickers": [
+          "AAPL", "ABT", "ADI", "ADP", "AMAT", "AMGN", "AMZN", "AVGO", "BA", "BKNG", "BLK", "BMY", "BSX", "BX", "CB", "C", "CAT", "CCI", "CMCSA", "COP", "COST", "CRM", "CSCO", "CTAS", "CVX", "DE", "DIS", "DHR", "ELV", "EQIX", "F", "FDX", "FISV", "GE", "GILD", "GM", "GOOGL", "GS", "HD", "HON", "IBM", "ICE", "INTC", "ISRG", "JPM", "KO", "LAMR", "LLY", "LMT", "LOW", "LRCX", "MA", "MCD", "MCK", "MDLZ", "MDT", "META", "MMM", "MO", "MS", "MSFT", "NKE", "NOC", "NOW", "NVDA", "ORCL", "PANW", "PEP", "PFE", "PLD", "PGR", "PYPL", "REGN", "RTX", "SBUX", "SCHW", "SHW", "SO", "SPGI", "SYK", "T", "TJX", "TMO", "TMUS", "TT", "UNH", "UPS", "USB", "VRTX", "WM", "WMT", "XOM", "ZTS"
+        ]
+      
+  }
+  

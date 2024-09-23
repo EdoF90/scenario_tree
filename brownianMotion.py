@@ -60,6 +60,7 @@ class BrownianMotion(StochModel):
             arb = check_arbitrage_prices(prices, parent_node)
             if (arb == False):
                 logging.info(f"No arbitrage solution found after {counter} iteration(s)")
+            arb = False
         if counter >= 10000:
             raise RuntimeError(f"No arbitrage solution NOT found after {counter} iteration(s)")
         else:

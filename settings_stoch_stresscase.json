@@ -1,0 +1,6 @@
+{
+    "start": "2023-05-01",
+    "end": "2024-05-01",
+    "tickers": ["XOM", "WMT", "KO", "GOOG", "AMZN", "F", "BA", "AAPL", "NKE", "MCD", "PYPL", "PFE", "JPM", "NFLX", "DIS", 
+    "META", "MA", "CRM", "ABNB", "DAL", "RL", "RACE", "UBER", "MPC", "T"]
+}

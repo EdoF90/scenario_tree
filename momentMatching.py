@@ -124,7 +124,7 @@ class MomentMatching(StochModel): # Instance of the abstract class StochModel
             
             # Check if there is an arbitrage opportunity
             arb = check_arbitrage_prices(prices, parent_node)
-
+            #arb = False
             # If an arbitrage-free and good quality solution is found, then log some info, add the generated nodes to the tree and break the loop
             if (arb == False) and (fun <= 1):
                 flag = False
