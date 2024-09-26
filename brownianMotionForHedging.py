@@ -1,28 +1,31 @@
 # -*- coding: utf-8 -*-
-from .stochModel import StochModel
-import yfinance as yf
-from scipy import stats
-import numpy as np
-from .checkarbitrage import check_arbitrage_prices
 import logging
+import numpy as np
+import yfinance as yf
 import gurobipy as gp
+from scipy import stats
 from gurobipy import GRB
+from .stochModel import StochModel
+from .checkarbitrage import check_arbitrage_prices
+
+''' 
+BrownianMotionForHedging: stochastic model used to simulate stock price dynamics 
+uder the Geometric Brownian Motion model.
+simulate_one_time_step: for each parent node in scenario tree, it generates children 
+    nodes by computing new asset values and the probabilities of each new node.
+    Stock prices following Geometric Brownian Motion are generated until a no arbitrage 
+    setting is found. If the market is arbitrage free, option prices (using Black and Scholes formula)
+    and cash new values are computed.
+'''
 
 class BrownianMotionForHedging(StochModel):
-    ''' BrownianMotionForHedging: stochastic model used to simulate stock price dynamics 
-        uder the Geometric Brownian Motion model.
-        simulate_one_time_step: for each parent node in scenario tree, it generates children 
-        nodes by computing new asset values and the probabilities of each new node.
-        Stock prices following Geometric Brownian Motion are generated until a no arbitrage 
-        setting is found. If the market is arbitrage free, option prices (using Black and Scholes formula)
-        and cash new values are computed.
-    '''
 
     def __init__(self, 
                  sim_setting, 
                  option_list, 
                  dt, mu, 
                  sigma, rho, 
+                 skew, kur, 
                  rnd_state): 
         
         super().__init__(sim_setting)
@@ -32,6 +35,8 @@ class BrownianMotionForHedging(StochModel):
         self.mu = mu
         self.sigma = sigma
         self.corr = rho 
+        self.skew = skew
+        self.kur = kur
         self.rnd_state = rnd_state
 
 
@@ -74,7 +79,7 @@ class BrownianMotionForHedging(StochModel):
         if counter >= 100:
             raise RuntimeError(f"No arbitrage solution NOT found after {counter} iteration(s)")
         else:
-            # probs = 1/n_children * np.ones(n_children) #TODO: uniform probabilities ? 
+            # probs = 1/n_children * np.ones(n_children) #  uniform probabilities ? 
             probs = self.compute_probabilities(n_children, parent_stock_prices, stock_prices)
 
         # Options values
@@ -82,8 +87,13 @@ class BrownianMotionForHedging(StochModel):
         for j in range(self.n_shares):
             S0 = stock_prices[j,:]
             time_to_maturity = remaining_times * self.dt 
-            # hedging options are assumed to be of European type
-            option_prices[j,:] = self.option_list[j].BlackScholesPrice(S0, time_to_maturity)
+            if time_to_maturity != 0:
+                # hedging options are assumed to be of European type
+                option_prices[j,:] = self.option_list[j].BlackScholesPrice(S0, time_to_maturity)
+                option_prices[j+self.n_shares,:] = self.option_list[j+self.n_shares].BlackScholesPrice(S0, time_to_maturity)
+            else:
+                option_prices[j,:] = self.option_list[j].getpayoff(S0)
+                option_prices[j+self.n_shares,:] = self.option_list[j+self.n_shares].getpayoff(S0)
 
         # Cash value
         cash_price = parent_cash_price * np.exp(self.option_list[0].risk_free_rate*self.dt) * np.ones(shape=n_children)
@@ -124,11 +134,8 @@ class BrownianMotionForHedging(StochModel):
         probabilities = np.zeros(n_children)
         for i in range(n_children):
             probabilities[i] = M.getVars()[i].X
-
+ 
         return probabilities
-        '''
-        WARNING --> the above moment matching involves only marginal moments. To change.
-        '''
     
     
     def moments(self, dynamics: str, number: int, underlying_index: int):
