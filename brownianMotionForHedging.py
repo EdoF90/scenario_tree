@@ -147,9 +147,7 @@ class BrownianMotionForHedging(StochModel):
         '''
 
         # Define initial solution: equal probabilities for each node
-        initial_solution = []
         p_init = (1 / n_children) * np.ones(n_children)
-        initial_solution.append(p_init)
                 
         # Define bounds
         bounds = [(0.05, 0.4)] * (n_children) # bounds for probabilities to avoid vanishing probabilities
@@ -167,7 +165,7 @@ class BrownianMotionForHedging(StochModel):
         args = (parent_stock_prices, stock_prices, n_children)
 
         # Running optimization
-        res = optimize.minimize(self._MM_objective, initial_solution, method='SLSQP', args=args, bounds=bounds, constraints=constraints, options={'maxiter': 5000})
+        res = optimize.minimize(self._MM_objective, p_init, method='SLSQP', args=args, bounds=bounds, constraints=constraints, options={'maxiter': 5000})
         probabilities = res.x
         
         return probabilities
