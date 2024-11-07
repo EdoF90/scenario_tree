@@ -67,3 +67,9 @@ def correlation(x, p):
                 cor[j,i] = cor[i,j]
 
     return cor
+
+
+def second_moment(x, p):
+    second_moment = np.dot(x**2, p)
+    
+    return second_moment

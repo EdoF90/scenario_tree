@@ -8,7 +8,7 @@ from gurobipy import GRB
 from scipy import optimize
 from .stochModel import StochModel
 from .checkarbitrage import check_arbitrage_prices
-from .calculatemoments import mean, std, correlation
+from .calculatemoments import mean, second_moment, correlation
 
 ''' 
 BrownianMotionForHedging: stochastic model used to simulate stock price dynamics 
@@ -116,7 +116,7 @@ class BrownianMotionForHedging(StochModel):
 
         # Following lines calculate the statistical moments of the tree
         tree_mean = mean(returns, p)
-        tree_std = std(returns, p) 
+        tree_moment2 = second_moment(returns, p) 
         tree_cor = correlation(returns, p)
 
         true_moment1 = np.zeros(self.n_shares)
@@ -127,7 +127,7 @@ class BrownianMotionForHedging(StochModel):
 
         # The objective function is the squared difference among the expexted moments and the moments underlying the generated tree
         sqdiff = (np.linalg.norm(true_moment1 - tree_mean, 2) + 
-                  np.linalg.norm(true_moment2 - tree_std, 2) + 
+                  np.linalg.norm(true_moment2 - tree_moment2, 2) + 
                   np.linalg.norm(self.corr - tree_cor, 1))
         
         return sqdiff
