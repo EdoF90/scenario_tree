@@ -137,7 +137,7 @@ class BrownianMotionForHedging_Gurobi(StochModel):
             true_property = self.moments(dynamics='BS', number=-1, underlying_index=j)
             for index, i in enumerate(range(j+1, self.n_shares)):                
                 popu_property = (np.log(stock_prices[j,:] / parent_stock_prices[j]) * np.log(stock_prices[i,:] / parent_stock_prices[i])) @ np.array(p)
-                diff3 = (true_property[index] - popu_property)**2 #TODO  provato con il quadrato della differenza, è ok? 
+                diff3 = (true_property[index] - popu_property)**2
                 Diff3 = np.hstack((Diff3, diff3))
 
         M.setObjective(np.sum(Diff1) + np.sum(Diff2) + np.sum(Diff3), GRB.MINIMIZE) 

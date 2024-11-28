@@ -148,11 +148,3 @@ class MomentMatching(StochModel): # Instance of the abstract class StochModel
             endt = time.time()
             logging.info(f"Computational time to build the tree:{endt - startt} seconds")
             return probs, prices # return probababilities and prices to add nodes to the tree
-    
-    '''
-    NOT USED
-    #TODO: Need to properly define this function
-    def simulate_all_horizon(self, time_horizon):
-
-        return 0
-    '''
