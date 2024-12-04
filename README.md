@@ -13,7 +13,6 @@ The files contain:
 
 - *brownianMotion* contains the prototype of a *stochModel* implementing a Brownian Motion.
 
-- The folder returns is WIP
 
 ## How to use it
 

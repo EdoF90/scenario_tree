@@ -55,8 +55,8 @@ class ScenarioTree(nx.DiGraph):
                     id_new_node = count
                     self.add_node(
                         id_new_node,
-                        obs= x[:,j],
-                        prob= p[j],
+                        obs=x[:,j],
+                        prob=p[j],
                         id=count,
                         stage=i
                     )
@@ -131,9 +131,9 @@ class ScenarioTree(nx.DiGraph):
     def _generate_one_time_step(self, n_scenarios, parent_node, remaining_times): 
         # Given a parent node and the number of children to generate, it returns the children with corresponding probabilities
         prob, obs = self.stoch_model.simulate_one_time_step(
-            n_scenarios,
-            parent_node,
-            remaining_times
+            parent_node=parent_node,
+            n_children=n_scenarios,
+            # TODO: remaining_times
         )
         return prob, obs
     
