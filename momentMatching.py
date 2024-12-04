@@ -13,20 +13,8 @@ class MomentMatching(StochModel):
 
     def __init__(self, sim_setting):
         super().__init__(sim_setting)
-        '''
-        self.VC = sim_setting['volatilityclumping']
-        self.MRF = sim_setting['meanreversionfactor']
-        self.MRL = sim_setting['meanreversionfactor']
-        self.RP = sim_setting['risk_premium']
-        self.exp_mean = sim_setting['expectedmean']
-        self.exp_std = sim_setting['expectedstd']
-        self.exp_skew = sim_setting['expectedskewness']
-        self.exp_kur = sim_setting['expectedkurtosis']
-        self.exp_cor = sim_setting['expectedcorrelation']
-        '''
-        self.n_children = 0 # commentare ??
-        self.parent_node = [] # commentare ??
-        # self.risk_premium = sim_setting['risk_premium']
+        self.n_children = 0
+        self.parent_node = []
         self.ExpectedMomentsEstimate(
             sim_setting['start'],
             sim_setting['end']
@@ -35,8 +23,8 @@ class MomentMatching(StochModel):
     def ExpectedMomentsEstimate(self, start, end):
         data = yf.download(
             self.tickers,
-            start= start,#'2023-05-01',
-            end= end#'2024-05-01'
+            start= start,
+            end= end
         )['Adj Close']
         hist_prices = data.dropna()
         #returns = data.pct_change().dropna()
@@ -50,15 +38,6 @@ class MomentMatching(StochModel):
         ).values
         self.exp_cor = hist_prices.corr().values
     
-    '''
-    def update_expectedstd(self, parent_node):
-        for i in range(self.n_shares):
-            self.exp_std[i] = self.VC[i] * abs(parent_node[i] - self.exp_mean[i]) + (1-self.VC[i]) * (self.exp_std[i])
-    
-    def update_expectedmean(self, parent_node):
-        for i in range(self.n_shares):
-            self.exp_mean[i] = self.risk_free_return + self.RP[i] * self.exp_std[i]
-    '''
     def set_n_children(self, n_children):
         self.n_children = n_children
 
@@ -116,17 +95,11 @@ class MomentMatching(StochModel):
         initial_solution = np.concatenate(initial_solution_parts)
 
         # Define bounds
-        '''
-        bounds_p= [(0, np.inf)] * (self.n_children) 
-        bounds_x = [(None, None)] * (self.n_shares * self.n_children)
-        bounds = bounds_p + bounds_x
-        '''
         bounds = [(0, np.inf)]*(self.n_children*(2+self.n_shares))
 
         # Define constraints
         constraints = [{'type': 'eq', 'fun': self._constraint}]
 
-        # tmp = lambda x: _objective(x, self.n_children, 6)
         # Running optimization
         res = optimize.minimize(
             self._objective,
@@ -144,14 +117,8 @@ class MomentMatching(StochModel):
         x_mat = x_res.reshape((self.n_shares, self.n_children))
         return p_res, x_mat, nu_res, res.fun
 
-    # TODO: pensare gestione processo non stazionario
-    def simulate_one_time_step(self, n_children, parent_node):
-        '''
-        if parent_node.t > 1:
-            self.risk_premium
-            self.update_expectedstd(parent_node)
-            self.update_expectedmean(parent_node)
-        '''        
+    # TODO: generalize to a non stationary process
+    def simulate_one_time_step(self, n_children, parent_node):      
         self.set_n_children(n_children)
         self.set_parent_node(parent_node)
         arb = True

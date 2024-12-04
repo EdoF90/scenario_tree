@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 import os
-import logging
 import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
@@ -16,14 +15,14 @@ def prod(val):
 
 
 class ScenarioTree(nx.DiGraph):
-    def __init__(self, name: str, branching_factors: list, len_vector: int, initial_share_price, stoch_model: StochModel):
+    def __init__(self, name: str, branching_factors: list, len_vector: int, initial_value, stoch_model: StochModel):
         nx.DiGraph.__init__(self)
         self.starting_node = 0
         self.len_vector = len_vector
         self.stoch_model = stoch_model
         self.add_node(
             self.starting_node,
-            prices=initial_share_price,
+            obs=initial_value,
             prob=1,
             id=0,
             stage=0
@@ -46,12 +45,12 @@ class ScenarioTree(nx.DiGraph):
             self.nodes_time.append([])
             self.filtration.append([])
             for parent_node in last_added_nodes:
-                p, x = self._generate_new_period(self.branching_factors[i], self._node[parent_node]['prices'])
+                p, x = self._generate_new_period(self.branching_factors[i], self._node[parent_node]['obs'])
                 for j in range(self.branching_factors[i]):
                     id_new_node = count
                     self.add_node(
                         id_new_node,
-                        prices= x[:,j],
+                        obs= x[:,j],
                         prob= p[j],
                         id=count,
                         stage=i
@@ -73,23 +72,23 @@ class ScenarioTree(nx.DiGraph):
     def get_matrix_obs(self, t):
         # each row is a share, each column a scenario
         ris = np.zeros(shape=(
-            len(self.nodes()[0]['prices']),
+            len(self.nodes()[0]['obs']),
             len(self.nodes_time[t])
         ))
         for s, ele in enumerate(self.nodes_time[t]):
-            ris[:, s] = self.nodes()[ele]['prices']
+            ris[:, s] = self.nodes()[ele]['obs']
         return ris
 
     def get_leaves(self):
         return self.leaves
     
     def get_history_node(self, n):      
-        ris = np.array([self.nodes[n]['prices']]).T
+        ris = np.array([self.nodes[n]['obs']]).T
         if n == 0:
             return ris 
         while n != self.starting_node:
             n = list(self.predecessors(n))[0]
-            ris = np.hstack((np.array([self.nodes[n]['prices']]).T, ris))
+            ris = np.hstack((np.array([self.nodes[n]['obs']]).T, ris))
         return ris
 
     def print_matrix_form_on_file(self, name_details=""):
@@ -154,12 +153,12 @@ class ScenarioTree(nx.DiGraph):
         '''
         It returns a new period of the tree with correpsonding probabilities
         '''
-        prob, prices = self.stoch_model.simulate_one_time_step(
+        prob, obs = self.stoch_model.simulate_one_time_step(
             n_scenarios,
             parent_node,
             (len(self.nodes_time)-1)
         )
-        return prob, prices
+        return prob, obs
     
     def plot_all_scenarios(self):
         for leaf in self.leaves:    

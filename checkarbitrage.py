@@ -23,6 +23,6 @@ def check_arbitrage_prices(new_prices, prev_prices):
     model.optimize()
     
     if model.status == grb.GRB.Status.OPTIMAL:
-        return False # Il sistema ha una soluzione, quindi non c'è arbitraggio
+        return False # The system has a solution, thus no arbitrage
     else:
-        return True # Il sistema non ha una soluzione, quindi c'è arbitraggio
+        return True # The system has a solution, thus arbitrage
