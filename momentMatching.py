@@ -11,22 +11,33 @@ from .calculatemoments import mean, std, skewness, kurtosis, correlation
 
 class MomentMatching(StochModel): # Instance of the abstract class StochModel
 
-    def __init__(self, sim_setting):
-        super().__init__(sim_setting)
-        self.n_children = 0 # number of children to generate
+    ''' 
+    Stochastic model used to simulate stock price dynamics and children probabilities by 
+    matching simulated properties (first, third and fourth moments, std, correlation,...) 
+    with historical ones.
+    '''
 
-        self.ExpectedMomentsEstimate(
+
+    def __init__(self, sim_setting):
+        self.tickers = sim_setting['tickers']
+        self.n_shares = len(self.tickers)
+        self.start_date = sim_setting["start"]
+        self.end_date = sim_setting["end"]
+
+        self.ExpectedMomentsEstimate( # definition of the expected moments to match
             start = self.start_date,
             end = self.end_date
-        ) # definition of the expected moments to match
+        ) 
     
-    def ExpectedMomentsEstimate(self, start, end):
+    def ExpectedMomentsEstimate(self, start, end): 
+        ''' Historical moments estimate.'''
+
         hist_prices = yf.download(
             self.tickers, 
             start=start,
             end=end
             )['Close']
-        monthly_prices = hist_prices.resample('ME').last()
+        monthly_prices = hist_prices.resample('ME').last() 
         log_returns = np.log(monthly_prices / monthly_prices.shift(1)).dropna()
 
         self.exp_mean = log_returns.mean().values
@@ -39,14 +50,15 @@ class MomentMatching(StochModel): # Instance of the abstract class StochModel
             ).values
         self.exp_cor = log_returns.corr().values
     
-    def set_n_children(self, n_children): # set the number of children to generate
-        self.n_children = n_children
     
-    def _objective(self, y): # objective function of the MM model
-        # y is the vector of decision variables: the first n_children entries are node proabilities, the remaining are log-returns
+    def _objective(self, y): 
+        '''Objective function of the MM model. y is the vector of decision variables: 
+        the first n_children entries are node probabilities, the remaining are log-returns.'''
+
         p = y[:self.n_children] # probabilities
         x = y[self.n_children:] # log-returns
-        x_matrix = x.reshape((self.n_shares, self.n_children)) # log-returns in matrix form (row: shares - column: scenario)
+        # log-returns in matrix form (row: shares , column: scenario)
+        x_matrix = x.reshape((self.n_shares, self.n_children)) 
         # Following lines calculate the statistical moments of the tree
         tree_mean = mean(x_matrix, p)
         tree_std = std(x_matrix, p) 
@@ -54,7 +66,8 @@ class MomentMatching(StochModel): # Instance of the abstract class StochModel
         tree_kurt = kurtosis(x_matrix, p)
         tree_cor = correlation(x_matrix, p)
 
-        # The objective function is the squared difference among the expexted moments and the moments underlying the generated tree
+        # The objective function is the squared difference between the expexted moments 
+        # and the moments of the generated tree
         sqdiff = (np.linalg.norm(self.exp_mean - tree_mean, 2) + np.linalg.norm(self.exp_std - tree_std, 2) + 
                 np.linalg.norm(self.exp_skew - tree_skew, 2) + np.linalg.norm(self.exp_kur - tree_kurt, 2) +
                 np.linalg.norm(self.exp_cor - tree_cor, 1))
@@ -63,12 +76,17 @@ class MomentMatching(StochModel): # Instance of the abstract class StochModel
     
     
     def _constraint(self, y):
-        # probs sum up to one
+        '''Probs sum up to one.'''
+
         p = y[:self.n_children]
         return np.sum(p) - 1
     
+    
     def solve(self):
-        # Define initial solution: equal proabibilities for each node, log-returns sampled from a Normal distribution
+        '''Solve an SLSQP problem to find probabilities and values.'''
+
+        # Define an initial solution: uniform nodes probabilities, log-returns 
+        # sampled from a Normal distribution
         initial_solution_parts = []
         p_init = (1 / self.n_children) * np.ones(self.n_children)
         initial_solution_parts.append(p_init)
@@ -77,12 +95,11 @@ class MomentMatching(StochModel): # Instance of the abstract class StochModel
             initial_solution_parts.append(part)
                 
         initial_solution = np.concatenate(initial_solution_parts)
-
-        # Define bounds
-        # bounds for probabilities to avoid vanishing probabilities
-        bounds_p= [(0.05, 0.4)] * (self.n_children) 
         
-        # No bounds for log-returns, if you want to bound them uncomment lines 84-88
+        # Define probabilities bounds 
+        bounds_p= [(0, 1)] * (self.n_children) 
+        
+        # Define log-returns bounds 
         bounds_x = [(None, None)] * (self.n_shares * self.n_children)
 
         bounds = bounds_p + bounds_x
@@ -90,22 +107,33 @@ class MomentMatching(StochModel): # Instance of the abstract class StochModel
         # Define constraints
         constraints = [{'type': 'eq', 'fun': self._constraint}]
 
-        # Running optimization
+        # Run optimization
         res = optimize.minimize(self._objective, initial_solution, method='SLSQP', bounds=bounds, constraints=constraints, options={'maxiter': 5000})
-        p_res = res.x[:self.n_children]
-        x_res = res.x[self.n_children:]
-        x_mat = x_res.reshape((self.n_shares, self.n_children))
+        
+        # Store the solution
+        p_res = res.x[:self.n_children] # probabilities
+        x_mat = res.x[self.n_children:].reshape((self.n_shares, self.n_children)) # values 
+        
         return p_res, x_mat, res.fun
+    
 
     def simulate_one_time_step(self, n_children, parent_node):
-        self.set_n_children(n_children) # set the number of nodes to generate
+        ''' 
+        It generates children nodes by computing new asset values and 
+        the probabilities of each new node. Stock prices are generated 
+        until a no arbitrage setting is found.
+        '''
+        
+        self.n_children = n_children # set the number of nodes to generate
+        
         # Inizialization
         arb = True
         counter = 0
         flag = True
         startt = time.time()
 
-        # Main loop: keeps solving the MM model until an arbitrage-free good quality solution is found (or until the maximum number of iterations is reached)
+        # Main loop: keeps solving the MM model until an arbitrage-free good quality 
+        # solution is found (or until the maximum number of iterations is reached)
         while flag and (counter < 100):
             counter += 1
 
@@ -119,8 +147,9 @@ class MomentMatching(StochModel): # Instance of the abstract class StochModel
             
             # Check if there is an arbitrage opportunity
             arb = check_arbitrage_prices(prices, parent_node)
-            #arb = False
-            # If an arbitrage-free and good quality solution is found, then log some info, add the generated nodes to the tree and break the loop
+
+            # If an arbitrage-free and good quality solution is found, then log some info, 
+            # add the generated nodes to the tree and break the loop
             if (arb == False) and (fun <= 1):
                 flag = False
                 tree_mean = mean(returns, probs)

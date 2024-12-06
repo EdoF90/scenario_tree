@@ -1,8 +1,6 @@
 import logging
 import time
 import numpy as np
-import yfinance as yf
-from scipy import stats
 from scipy import optimize
 from .stochModel import StochModel
 from .checkarbitrage import check_arbitrage_prices
@@ -11,34 +9,39 @@ from .calculatemoments import mean, std, skewness, kurtosis, correlation
 
 class MomentMatchingForHedging(StochModel): # Instance of the abstract class StochModel
 
+    ''' 
+    Stochastic model used in hedging settings to simulate stock price 
+    dynamics and children probabilities by matching simulated properties 
+    (first, third and fourth moments, std, correlation,...) with 
+    historical ones. Options are priced via Black&Scholes formula.
+    '''
+
     def __init__(self, 
                  sim_setting, 
                  option_list,
                  dt, mu, sigma, 
-                 rho, skew, # kur,
+                 rho, skew, kur,
                  rnd_state):
-        super().__init__(sim_setting)
+        self.n_shares = len(sim_setting['tickers'])
         self.n_options = len(option_list)
         self.option_list = option_list
         self.dt = dt
         self.mu = mu * self.dt 
         self.sigma = sigma * np.sqrt(self.dt)
         self.corr = rho
-        self.skew = skew #TODO: is it correct or is it to be modified? 
-        #self.kur = kur #TODO: is it correct or is it to be modified? 
+        self.skew = skew 
+        self.kur = kur 
         self.rnd_state = rnd_state
-        
-
-    
-    def set_n_children(self, n_children): # set the number of children to generate
-        self.n_children = n_children
     
 
-    def _objective(self, y): # objective function of the MM model
-        # y is the vector of decision variables: the first n_children entries are node probabilities, the remaining are log-returns
+    def _objective(self, y): 
+        '''Objective function of the MM model. y is the vector of decision variables: 
+        the first n_children entries are node probabilities, the remaining are log-returns.'''
+
         p = y[:self.n_children] # probabilities
         x = y[self.n_children:] # log-returns
-        x_matrix = x.reshape((self.n_shares, self.n_children)) # log-returns in matrix form (row: shares - column: scenario)
+        # log-returns in matrix form (rows: shares , columns: scenarios)
+        x_matrix = x.reshape((self.n_shares, self.n_children)) 
         # Following lines calculate the statistical moments of the tree
         tree_mean = mean(x_matrix, p)
         tree_std = std(x_matrix, p) 
@@ -46,7 +49,8 @@ class MomentMatchingForHedging(StochModel): # Instance of the abstract class Sto
         tree_kurt = kurtosis(x_matrix, p)
         tree_cor = correlation(x_matrix, p)
 
-        # The objective function is the squared difference among the expexted moments and the moments underlying the generated tree
+        # The objective function is the sum of the squared difference between each expected moment
+        # and the moment of the generated tree
         sqdiff = (np.linalg.norm(self.mu - tree_mean, 2) + np.linalg.norm(self.sigma - tree_std, 2) + 
                 np.linalg.norm(self.skew - tree_skew, 2) + #+ np.linalg.norm(self.kur - tree_kurt, 2) +
                 np.linalg.norm(self.corr - tree_cor, 1))
@@ -55,13 +59,17 @@ class MomentMatchingForHedging(StochModel): # Instance of the abstract class Sto
     
     
     def _constraint(self, y):
-        # Probs sum up to one
+        '''Probs sum up to one.'''
+
         p = y[:self.n_children]
         return np.sum(p) - 1
     
 
     def solve(self):
-        # Define initial solution: equal proabibilities for each node, log-returns sampled from a Normal distribution
+        '''Solve an SLSQP problem to find probabilities and values.'''
+
+        # Define an initial solution: uniform nodes probabilities, log-returns 
+        # sampled from a Normal distribution
         initial_solution_parts = []
         p_init = (1 / self.n_children) * np.ones(self.n_children)
         initial_solution_parts.append(p_init)
@@ -71,44 +79,51 @@ class MomentMatchingForHedging(StochModel): # Instance of the abstract class Sto
                 
         initial_solution = np.concatenate(initial_solution_parts)
 
-        # Define bounds
-        bounds_p= [(0.05, 0.4)] * (self.n_children) # bounds for probabilities to avoid vanishing probabilities
-        '''
-        mean_bound = np.mean(self.mu)
-        std_bound = np.max(self.sigma)
-        lb = mean_bound - 3*std_bound
-        ub = mean_bound + 3*std_bound
-        bounds_x = [(lb, ub)] * (self.n_shares * self.n_children)
-        '''
-        bounds_x = [(None, None)] * (self.n_shares * self.n_children) # No bounds for log-returns, if you want to bound them uncomment lines 84-88
+        # Define probabilities bounds 
+        bounds_p= [(0, 1)] * (self.n_children) 
+
+        # Define log-returns bounds
+        bounds_x = [(None, None)] * (self.n_shares * self.n_children) 
 
         bounds = bounds_p + bounds_x
         
         # Define constraints
         constraints = [{'type': 'eq', 'fun': self._constraint}]
 
-        # Running optimization
+        # Run optimization 
         res = optimize.minimize(self._objective, initial_solution, method='SLSQP', bounds=bounds, constraints=constraints, options={'maxiter': 5000})
-        p_res = res.x[:self.n_children]
-        x_res = res.x[self.n_children:]
-        x_mat = x_res.reshape((self.n_shares, self.n_children))
+        
+        # Store the solution
+        p_res = res.x[:self.n_children]  # probabilities
+        x_mat = res.x[self.n_children:].reshape((self.n_shares, self.n_children)) # values
 
         return p_res, x_mat, res.fun
     
 
-    def simulate_one_time_step(self, n_children, parent_node, remaining_times):
-        
-        parent_stock_prices= parent_node[1:self.n_shares+1] 
-        parent_cash_price = parent_node[0]
+    def simulate_one_time_step(self, n_children, parent_node):
 
-        self.set_n_children(n_children) # set the number of nodes to generate
+        ''' 
+        It generates children nodes by computing new asset values and 
+        the probabilities of each new node. Stock prices are generated 
+        until a no arbitrage setting is found. If the market is arbitrage 
+        free, option prices (using Black and Scholes formula) and cash 
+        new values are computed.
+        '''
+        
+        remaining_times = parent_node['remaining_times']-1 # remaining times of children nodes
+        parent_stock_prices= parent_node['obs'][1:self.n_shares+1]  
+        parent_cash_price = parent_node['obs'][0]
+
+        self.n_children = n_children # set the number of nodes to generate
+        
         # Inizialization
         arb = True
         counter = 0
         flag = True
         start_t = time.time()
 
-        # Main loop: keeps solving the MM model until an arbitrage-free good quality solution is found (or until the maximum number of iterations is reached)
+        # Main loop: keeps solving the MM model until an arbitrage-free good quality 
+        # solution is found (or until the maximum number of iterations is reached)
         while flag and (counter < 100):
             counter += 1
 
@@ -122,21 +137,9 @@ class MomentMatchingForHedging(StochModel): # Instance of the abstract class Sto
             
             # Check if there is an arbitrage opportunity
             arb = check_arbitrage_prices(stock_prices, parent_stock_prices)
-            #arb = False
-            # If an arbitrage-free and good quality solution is found, then log some info, add the generated nodes to the tree and break the loop
-            '''tree_mean = mean(returns, probs)
-            tree_std = std(returns, probs)
-            tree_skew = skewness(returns, probs)
-            tree_kurt = kurtosis(returns, probs)
-            tree_cor = correlation(returns, probs)
-            print(f"No arbitrage solution found after {counter} iteration(s)")
-            print(f"Objective function value: {fun}")
-            print(f"Expected vs Generated Moments:")
-            print(f"Mean: Expected = {self.mu}, Generated = {tree_mean}, Exp-Gen = {self.mu - tree_mean}")
-            print(f"Std Dev: Expected = {self.sigma}, Generated = {tree_std}, Exp-Gen = {self.sigma - tree_std}")
-            print(f"Skewness: Expected = {self.skew}, Generated = {tree_skew}, Exp-Gen = {self.skew - tree_skew}")
-            #print(f"Kurtosis: Expected = {self.kur}, Generated = {tree_kurt}, Exp-Gen = {self.kur - tree_kurt}")
-            print(f"Correlation: Expected = {self.corr}, Generated = {tree_cor}, Exp-Gen = {self.corr - tree_cor}")'''
+
+            # If an arbitrage-free and good quality solution is found, then log some 
+            # info, add the generated nodes to the tree and break the loop
             if (arb == False) and (fun <= 1):
                 flag = False
                 tree_mean = mean(returns, probs)
@@ -177,4 +180,4 @@ class MomentMatchingForHedging(StochModel): # Instance of the abstract class Sto
 
         prices = np.vstack((cash_price, stock_prices, option_prices))
         
-        return probs, prices # return probababilities and prices to add nodes to the tree
+        return probs, prices # return probabilities and prices to add nodes to the tree

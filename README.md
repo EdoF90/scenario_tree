@@ -34,7 +34,7 @@ class EasyStochasticModel(StochModel):
             mean=self.averages,
             cov=np.identity(self.dim_obs),
             size=n_children
-        )
+        ).T # obs.shape = (len_vector, n_children)
         return probs, obs 
 
 sim_setting = {

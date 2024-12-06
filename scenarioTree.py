@@ -6,34 +6,29 @@ import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
 from .stochModel import StochModel
-
-
-def prod(val):  
-    res = 1 
-    for ele in val:  
-        res *= ele  
-    return res   
-
+ 
 
 class ScenarioTree(nx.DiGraph):
     def __init__(self, name: str, branching_factors: list, len_vector: int, initial_value, stoch_model: StochModel):
         nx.DiGraph.__init__(self)
         starttimer = time.time()
         self.starting_node = 0
-        self.len_vector = len_vector # number of shares available in the market
+        self.len_vector = len_vector # number of stochastic variables
         self.stoch_model = stoch_model # stochastic model used to generate the tree
-        self.add_node(
+        depth = len(branching_factors) # tree depth
+        self.add_node( # add the node 0  
             self.starting_node,
             obs=initial_value,
             prob=1,
             id=0,
-            stage=0
-        ) # add the node 0     
+            stage=0,
+            remaining_times=depth,
+            path_prob=1 # path probability from the root node to the current node
+        )    
         self.name = name
         self.filtration = []
         self.branching_factors = branching_factors
-        depth = len(branching_factors)
-        self.n_scenarios = prod(self.branching_factors)
+        self.n_scenarios = np.prod(self.branching_factors)
         self.nodes_time = []
         self.nodes_time.append([self.starting_node])
 
@@ -48,8 +43,8 @@ class ScenarioTree(nx.DiGraph):
             
             # For each node of the last generated period add its children through the StochModel class
             for parent_node in last_added_nodes:
-                # Probabilities and observations are given by the stochastic model chosen (MM or GBM)
-                p, x = self._generate_one_time_step(self.branching_factors[i], self._node[parent_node]['obs'], remaining_times=depth-1-i)
+                # Probabilities and observations are given by the stochastic model chosen
+                p, x = self._generate_one_time_step(self.branching_factors[i], self._node[parent_node])
                 # Add all the generated nodes to the tree
                 for j in range(self.branching_factors[i]):
                     id_new_node = count
@@ -58,7 +53,9 @@ class ScenarioTree(nx.DiGraph):
                         obs=x[:,j],
                         prob=p[j],
                         id=count,
-                        stage=i
+                        stage=i+1,
+                        remaining_times=depth-1-i,
+                        path_prob=p[j]*self._node[parent_node]['path_prob'] # path probability from the root node to the current node
                     )
                     self.add_edge(parent_node, id_new_node)
                     next_level.append(id_new_node)
@@ -128,12 +125,13 @@ class ScenarioTree(nx.DiGraph):
         else:
             plt.show()
 
-    def _generate_one_time_step(self, n_scenarios, parent_node, remaining_times): 
-        # Given a parent node and the number of children to generate, it returns the children with corresponding probabilities
+
+    def _generate_one_time_step(self, n_scenarios, parent_node): 
+        '''Given a parent node and the number of children to generate, it returns the 
+        children with corresponding probabilities'''
         prob, obs = self.stoch_model.simulate_one_time_step(
             parent_node=parent_node,
-            n_children=n_scenarios,
-            # TODO: remaining_times
+            n_children=n_scenarios
         )
         return prob, obs
     
