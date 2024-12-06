@@ -97,11 +97,13 @@ class BrownianMotionForHedging(StochModel):
             S0 = stock_prices[j,:]
             time_to_maturity = remaining_times * self.dt 
             if time_to_maturity != 0:
-                # hedging options are assumed to be of European type  
+                # hedging options are assumed to be of European type. The first n_shares options are put, the others are call.
                 option_prices[j,:] = self.option_list[j].BlackScholesPrice(S0, time_to_maturity)
+                # delete the following line if there are only put options
                 option_prices[j+self.n_shares,:] = self.option_list[j+self.n_shares].BlackScholesPrice(S0, time_to_maturity)
             else:
                 option_prices[j,:] = self.option_list[j].get_payoff(S0)
+                # delete the following line if there are only put options
                 option_prices[j+self.n_shares,:] = self.option_list[j+self.n_shares].get_payoff(S0)
 
         # Cash value
