@@ -3,9 +3,9 @@ import logging
 import numpy as np
 import gurobipy as gp
 from gurobipy import GRB
+from assets import MultiStock
 from .stochModel import StochModel
 from .checkarbitrage import check_arbitrage_prices
-
 
 class BrownianMotionForHedging_Gurobi(StochModel):
     '''
@@ -19,7 +19,7 @@ class BrownianMotionForHedging_Gurobi(StochModel):
 
     def __init__(self, 
                  sim_setting, 
-                 option_list, 
+                 option_list,
                  dt, mu, 
                  sigma, rho, 
                  skew, kur, 
@@ -58,23 +58,15 @@ class BrownianMotionForHedging_Gurobi(StochModel):
             # In simulations settings (Geometric Brownian Motion): 
             # S(t+dt) = S(t) * exp((mu - 1/2*sigma**2) * dt + sigma * sqrt(dt) * Z)
             # where Z is a standard normal distribution
-            if self.n_shares > 1:
-                Z = self.rnd_state.multivariate_normal(
-                    mean = np.zeros(self.n_shares),
-                    cov  = self.corr,
-                    size = n_children, # verify the correctness of the size
-                    ).T    
-            else: 
-                Z = self.rnd_state.normal(loc = 0, scale = 1, size=n_children)
-
-            # Stochastic term: sigma * sqrt(dt) * Z 
-            Y = np.array(self.sigma).reshape(-1,1) * np.sqrt(self.dt) * Z
-
-            # Deterministic term: mu - 1/2*sigma**2
-            c = self.mu - 0.5 * self.sigma**2
-
-            # Stock prices increment
-            Increment = np.array(c).reshape(-1,1) * self.dt + Y
+            
+            # Generate correlated Brownian increments
+            Increment = MultiStock.generate_BM_stock_increments(
+                self.n_shares, 
+                self.option_list[0].risk_free_rate,
+                self.mu, self.sigma, self.corr, 
+                self.dt, n_children,
+                self.rnd_state,
+                risk_free = False)
 
             # Find new stock prices using the Geometric Brownian Motion formula
             stock_prices = np.zeros((self.n_shares, n_children))
@@ -90,22 +82,19 @@ class BrownianMotionForHedging_Gurobi(StochModel):
             raise RuntimeError(f"No arbitrage solution NOT found after {counter} iteration(s)")
         else:
             probs = self.compute_probabilities(n_children, parent_stock_prices, stock_prices)
-
-        # Options values
+        
+        # Options values 
         option_prices = np.zeros((self.n_options, n_children))
-        for j in range(self.n_shares):
-            S0 = stock_prices[j,:]
-            time_to_maturity = remaining_times * self.dt 
-            if time_to_maturity != 0:
-                # hedging options are assumed to be of European type. The first n_shares options are put, the others are call.
-                option_prices[j,:] = self.option_list[j].BlackScholesPrice(S0, time_to_maturity) 
-                # delete the following line if there are only put options
-                option_prices[j+self.n_shares,:] = self.option_list[j+self.n_shares].BlackScholesPrice(S0, time_to_maturity) 
-            else:
-                option_prices[j,:] = self.option_list[j].get_payoff(S0)
-                # delete the following line if there are only put options
-                option_prices[j+self.n_shares,:] = self.option_list[j+self.n_shares].get_payoff(S0) 
-
+        time_to_maturity = remaining_times * self.dt 
+        if time_to_maturity != 0:
+            for j, option in enumerate(self.option_list):
+                underlying_value = stock_prices[option.underlying_index,:]
+                option_prices[j,:] = option.BlackScholesPrice(underlying_value, time_to_maturity)
+        else: 
+            for j, option in enumerate(self.option_list):
+                underlying_value = stock_prices[option.underlying_index,:]
+                option_prices[j,:] = option.get_payoff(underlying_value)
+        
         # Cash value
         cash_price = parent_cash_price * np.exp(self.option_list[0].risk_free_rate*self.dt) * np.ones(shape=n_children)
 

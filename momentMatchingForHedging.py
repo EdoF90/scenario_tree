@@ -162,20 +162,17 @@ class MomentMatchingForHedging(StochModel): # Instance of the abstract class Sto
             end_t = time.time()
             logging.info(f"Computational time to build the tree:{end_t - start_t} seconds")
         
-        # Options values
+        # Options values 
         option_prices = np.zeros((self.n_options, n_children))
-        for j in range(self.n_shares):
-            S0 = stock_prices[j,:]
-            time_to_maturity = remaining_times * self.dt 
-            if time_to_maturity != 0:
-                # hedging options are assumed to be of European type. The first n_shares options are put, the others are call.
-                option_prices[j,:] = self.option_list[j].BlackScholesPrice(S0, time_to_maturity)
-                # delete the following line if there are only put options
-                option_prices[j+self.n_shares,:] = self.option_list[j+self.n_shares].BlackScholesPrice(S0, time_to_maturity)
-            else:
-                option_prices[j,:] = self.option_list[j].get_payoff(S0)
-                # delete the following line if there are only put options
-                option_prices[j+self.n_shares,:] = self.option_list[j+self.n_shares].get_payoff(S0)
+        time_to_maturity = remaining_times * self.dt 
+        if time_to_maturity != 0:
+            for j, option in enumerate(self.option_list):
+                underlying_value = stock_prices[option.underlying_index,:]
+                option_prices[j,:] = option.BlackScholesPrice(underlying_value, time_to_maturity)
+        else: 
+            for j, option in enumerate(self.option_list):
+                underlying_value = stock_prices[option.underlying_index,:]
+                option_prices[j,:] = option.get_payoff(underlying_value)
 
         # Cash value
         cash_price = parent_cash_price * np.exp(self.option_list[0].risk_free_rate*self.dt) * np.ones(shape=n_children)
