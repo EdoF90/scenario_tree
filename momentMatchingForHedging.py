@@ -17,15 +17,16 @@ class MomentMatchingForHedging(StochModel): # Instance of the abstract class Sto
     '''
 
     def __init__(self, 
-                 sim_setting, 
+                 tickers, 
                  option_list,
-                 dt, mu, sigma, 
+                 dt, r,  mu, sigma, 
                  rho, skew, kur,
                  rnd_state):
-        self.n_shares = len(sim_setting['tickers'])
+        self.n_shares = len(tickers)
         self.n_options = len(option_list)
         self.option_list = option_list
         self.dt = dt
+        self.risk_free_rate = r
         self.mu = mu * self.dt 
         self.sigma = sigma * np.sqrt(self.dt)
         self.corr = rho
@@ -175,7 +176,7 @@ class MomentMatchingForHedging(StochModel): # Instance of the abstract class Sto
                 option_prices[j,:] = option.get_payoff(underlying_value)
 
         # Cash value
-        cash_price = parent_cash_price * np.exp(self.option_list[0].risk_free_rate*self.dt) * np.ones(shape=n_children)
+        cash_price = parent_cash_price * np.exp(self.risk_free_rate*self.dt) * np.ones(shape=n_children)
 
         prices = np.vstack((cash_price, stock_prices, option_prices))
         

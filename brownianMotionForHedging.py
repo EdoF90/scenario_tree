@@ -18,17 +18,18 @@ class BrownianMotionForHedging(StochModel):
     '''
 
     def __init__(self, 
-                 sim_setting, 
+                 tickers, 
                  option_list, 
-                 dt, mu, 
+                 dt, r, mu, 
                  sigma, rho, 
                  skew, kur, 
                  rnd_state): 
         
-        self.n_shares = len(sim_setting['tickers'])
+        self.n_shares = len(tickers)
         self.dt = dt 
         self.n_options = len(option_list)
         self.option_list = option_list
+        self.risk_free_rate = r
         self.mu = mu
         self.sigma = sigma
         self.corr = rho 
@@ -62,7 +63,7 @@ class BrownianMotionForHedging(StochModel):
             # Generate correlated Brownian increments
             Increment = MultiStock.generate_BM_stock_increments(
                 self.n_shares, 
-                self.option_list[0].risk_free_rate,
+                self.risk_free_rate,
                 self.mu, self.sigma, self.corr, 
                 self.dt, n_children,
                 self.rnd_state,
@@ -96,7 +97,7 @@ class BrownianMotionForHedging(StochModel):
                 option_prices[j,:] = option.get_payoff(underlying_value)
 
         # Cash value
-        cash_price = parent_cash_price * np.exp(self.option_list[0].risk_free_rate*self.dt) * np.ones(shape=n_children)
+        cash_price = parent_cash_price * np.exp(self.risk_free_rate*self.dt) * np.ones(shape=n_children)
 
         prices = np.vstack((cash_price, stock_prices, option_prices))
         
