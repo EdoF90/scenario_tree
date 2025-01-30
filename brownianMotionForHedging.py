@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 import logging
 import numpy as np
+import gurobipy as gp
+from gurobipy import GRB
 from scipy import optimize
 from assets import MultiStock
 from .stochModel import StochModel
@@ -48,10 +50,10 @@ class BrownianMotionForHedging(StochModel):
         '''
 
         remaining_times = parent_node['remaining_times']-1 # remaining times of children nodes
-        parent_stock_prices= parent_node['obs'][1:self.n_shares+1] 
+        parent_stock_prices = parent_node['obs'][1:self.n_shares+1] 
         parent_cash_price = parent_node['obs'][0]
 
-        arb = True 
+        '''arb = True 
         counter = 0 
         # Simulate stock prices until no-arbitarge is found:
         while (arb == True) and (counter<100):
@@ -82,7 +84,29 @@ class BrownianMotionForHedging(StochModel):
         if counter >= 100:
             raise RuntimeError(f"No arbitrage solution NOT found after {counter} iteration(s)")
         else:
-            probs = self.compute_probabilities(n_children, parent_stock_prices, stock_prices)
+            probs = self.compute_probabilities(n_children, parent_stock_prices, stock_prices)'''
+        
+        # In simulations settings (Geometric Brownian Motion): 
+        # S(t+dt) = S(t) * exp((mu - 1/2*sigma**2) * dt + sigma * sqrt(dt) * Z)
+        # where Z is a standard normal distribution
+        
+        # Generate correlated Brownian increments
+        Increment = MultiStock.generate_BM_stock_increments(
+            self.n_shares, 
+            self.risk_free_rate,
+            self.mu, self.sigma, self.corr, 
+            self.dt, n_children,
+            self.rnd_state,
+            risk_free = False)
+        
+        # Find new stock prices using the Geometric Brownian Motion formula
+        stock_prices = np.zeros((self.n_shares, n_children))
+        for i in range(self.n_shares):
+            for s in range(n_children):
+                stock_prices[i,s] = parent_stock_prices[i] * np.exp(Increment[i,s]) 
+        
+        stock_prices = self.make_arbitrage_free_states(parent_stock_prices, stock_prices, n_children)
+        probs = self.compute_probabilities(n_children, parent_stock_prices, stock_prices)
 
         # Options values 
         option_prices = np.zeros((self.n_options, n_children))
@@ -181,3 +205,38 @@ class BrownianMotionForHedging(StochModel):
             if number == 2: moment = (self.sigma[j]**2 + self.mu[j]**2 * self.nu[j]) * self.dt + (self.mu[j] * self.dt)**2
         
         return moment
+    
+
+    def make_arbitrage_free_states(self, parent_stock_prices, children_stock_prices, n_children):
+        '''
+        Modify the generated states to get arbitrage-free scenarios.
+        In a binomial world, imposing that one state lies above the expected value, and the other below.
+        In multinomials, we assure that there is at least one child above, and one child below, the expected value.
+        Refer to Villaverde (2003) for a similar method.
+        '''
+        for j in range(0, self.n_shares):
+        
+            M = gp.Model("Get arbitrage-free scenarios")
+            s = []
+            for i in range(n_children): 
+                s.append( M.addVar(lb=0, vtype=GRB.CONTINUOUS, name='s'+str(i+1)) )
+            # s0 = parent_node[1]
+            s0 = parent_stock_prices[j]
+            alpha = 0.01 # this could be the risk-free rate or some historical 'mu', check        
+            # s_hat = self.next_states[1,:]
+            s_hat = children_stock_prices[j,:]
+
+            argmax, argmin = np.argmax(s_hat), np.argmin(s_hat)
+            M.addConstr( (s[argmax] - s0)/s0 - alpha >= 0, name='noarb1')
+            M.addConstr( (s[argmin] - s0)/s0 + alpha <= 0, name='noarb2')
+            M.setObjective(np.sum((s-s_hat)**2) , GRB.MINIMIZE)
+            M.Params.LogToConsole = 0  # ...avoid printing all info with m.optimize()
+            M.optimize()
+            for i in range(n_children):
+                # self.next_states[1,i] = M.getVars()[i].X
+                children_stock_prices[j,i] = M.getVars()[i].X
+            ## check the change
+            # print(s_hat)
+            # print(self.next_states[1,:])
+
+            return children_stock_prices
