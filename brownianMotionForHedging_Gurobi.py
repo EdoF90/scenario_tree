@@ -134,8 +134,9 @@ class BrownianMotionForHedging_Gurobi(StochModel):
           
         M = gp.Model("Get probabilities that best approximate the continuous process")
         p = []
+        lb = 1 / (n_children*10) 
         for i in range(n_children): # decision variables: probabilities
-            p.append(M.addVar(lb=0, ub=1, vtype=GRB.CONTINUOUS, name='p'+str(i+1)))
+            p.append(M.addVar(lb=lb, ub=1, vtype=GRB.CONTINUOUS, name='p'+str(i+1)))
         M.addConstr(np.sum(p) == 1, name='sum=1') # probs sum up to 1
         
         Diff1 = np.zeros(0)

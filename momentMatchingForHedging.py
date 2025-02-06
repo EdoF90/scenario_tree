@@ -81,7 +81,7 @@ class MomentMatchingForHedging(StochModel): # Instance of the abstract class Sto
         initial_solution = np.concatenate(initial_solution_parts)
 
         # Define probabilities bounds 
-        bounds_p= [(0, 1)] * (self.n_children) 
+        bounds_p= [(1/(self.n_children*10), 1)] * (self.n_children) 
 
         # Define log-returns bounds
         bounds_x = [(None, None)] * (self.n_shares * self.n_children) 

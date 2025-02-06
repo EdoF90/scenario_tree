@@ -174,7 +174,7 @@ class BrownianMotionForHedging(StochModel):
         p_init = (1 / n_children) * np.ones(n_children)
                 
         # Define probabilities bounds
-        bounds = [(0, 1)] * (n_children) 
+        bounds = [(1/(n_children*10), 1)] * (n_children) 
         
         # Define constraints
         constraints = [{'type': 'eq', 'fun': self._MM_constraint}]
