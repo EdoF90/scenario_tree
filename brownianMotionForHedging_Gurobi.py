@@ -5,7 +5,7 @@ import gurobipy as gp
 from gurobipy import GRB
 from assets import MultiStock
 from .stochModel import StochModel
-from .checkarbitrage import check_arbitrage_prices
+from .checkarbitrage import check_arbitrage_prices, make_arbitrage_free_states
 
 class BrownianMotionForHedging_Gurobi(StochModel):
     '''
@@ -75,7 +75,7 @@ class BrownianMotionForHedging_Gurobi(StochModel):
                 for s in range(n_children):
                     stock_prices[i,s] = parent_stock_prices[i] * np.exp(Increment[i,s]) 
 
-            arb = check_arbitrage_prices(stock_prices, parent_stock_prices)
+            arb = check_arbitrage_prices(stock_prices, parent_stock_prices, self.risk_free_rate, self.dt)
             if (arb == False):
                 logging.info(f"No arbitrage solution found after {counter} iteration(s)")
             
@@ -104,7 +104,7 @@ class BrownianMotionForHedging_Gurobi(StochModel):
             for s in range(n_children):
                 stock_prices[i,s] = parent_stock_prices[i] * np.exp(Increment[i,s]) 
         
-        stock_prices = self.make_arbitrage_free_states(parent_stock_prices, stock_prices, n_children)
+        stock_prices = make_arbitrage_free_states(parent_stock_prices, stock_prices, n_children)
         probs = self.compute_probabilities(n_children, parent_stock_prices, stock_prices)
         
         # Options values 
@@ -203,38 +203,3 @@ class BrownianMotionForHedging_Gurobi(StochModel):
             if number == 2: moment = (self.sigma[j]**2 + self.mu[j]**2 * self.nu[j]) * self.dt + (self.mu[j] * self.dt)**2
         
         return moment
- 
-
-    def make_arbitrage_free_states(self, parent_stock_prices, children_stock_prices, n_children):
-        '''
-        Modify the generated states to get arbitrage-free scenarios.
-        In a binomial world, imposing that one state lies above the expected value, and the other below.
-        In multinomials, we assure that there is at least one child above, and one child below, the expected value.
-        Refer to Villaverde (2003) for a similar method.
-        '''
-        for j in range(0, self.n_shares):
-        
-            M = gp.Model("Get arbitrage-free scenarios")
-            s = []
-            for i in range(n_children): 
-                s.append( M.addVar(lb=0, vtype=GRB.CONTINUOUS, name='s'+str(i+1)) )
-            # s0 = parent_node[1]
-            s0 = parent_stock_prices[j]
-            alpha = 0.01 # this could be the risk-free rate or some historical 'mu', check        
-            # s_hat = self.next_states[1,:]
-            s_hat = children_stock_prices[j,:]
-
-            argmax, argmin = np.argmax(s_hat), np.argmin(s_hat)
-            M.addConstr( (s[argmax] - s0)/s0 - alpha >= 0, name='noarb1')
-            M.addConstr( (s[argmin] - s0)/s0 + alpha <= 0, name='noarb2')
-            M.setObjective(np.sum((s-s_hat)**2) , GRB.MINIMIZE)
-            M.Params.LogToConsole = 0  # ...avoid printing all info with m.optimize()
-            M.optimize()
-            for i in range(n_children):
-                # self.next_states[1,i] = M.getVars()[i].X
-                children_stock_prices[j,i] = M.getVars()[i].X
-            ## check the change
-            # print(s_hat)
-            # print(self.next_states[1,:])
-
-            return children_stock_prices

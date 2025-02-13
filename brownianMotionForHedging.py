@@ -6,7 +6,7 @@ from gurobipy import GRB
 from scipy import optimize
 from assets import MultiStock
 from .stochModel import StochModel
-from .checkarbitrage import check_arbitrage_prices
+from .checkarbitrage import check_arbitrage_prices, make_arbitrage_free_states
 from .calculatemoments import mean, second_moment, correlation
 
 class BrownianMotionForHedging(StochModel):
@@ -77,7 +77,7 @@ class BrownianMotionForHedging(StochModel):
                 for s in range(n_children):
                     stock_prices[i,s] = parent_stock_prices[i] * np.exp(Increment[i,s]) 
 
-            arb = check_arbitrage_prices(stock_prices, parent_stock_prices)
+            arb = check_arbitrage_prices(stock_prices, parent_stock_prices, self.risk_free_rate, self.dt)
             if (arb == False):
                 logging.info(f"No arbitrage solution found after {counter} iteration(s)")
             
@@ -105,7 +105,7 @@ class BrownianMotionForHedging(StochModel):
             for s in range(n_children):
                 stock_prices[i,s] = parent_stock_prices[i] * np.exp(Increment[i,s]) 
         
-        stock_prices = self.make_arbitrage_free_states(parent_stock_prices, stock_prices, n_children)
+        stock_prices = make_arbitrage_free_states(parent_stock_prices, stock_prices, n_children)
         probs = self.compute_probabilities(n_children, parent_stock_prices, stock_prices)
 
         # Options values 
