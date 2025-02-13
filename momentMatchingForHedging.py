@@ -2,8 +2,9 @@ import logging
 import time
 import numpy as np
 from scipy import optimize
+from assets import MultiStock
 from .stochModel import StochModel
-from .checkarbitrage import check_arbitrage_prices
+from .checkarbitrage import check_arbitrage_prices, make_arbitrage_free_states
 from .calculatemoments import mean, std, skewness, kurtosis, correlation
 
 
@@ -137,7 +138,7 @@ class MomentMatchingForHedging(StochModel): # Instance of the abstract class Sto
                     stock_prices[i,s] = parent_stock_prices[i] * np.exp(returns[i,s])
             
             # Check if there is an arbitrage opportunity
-            arb = check_arbitrage_prices(stock_prices, parent_stock_prices)
+            arb = check_arbitrage_prices(stock_prices, parent_stock_prices, self.risk_free_rate, self.dt)
 
             # If an arbitrage-free and good quality solution is found, then log some 
             # info, add the generated nodes to the tree and break the loop
@@ -162,6 +163,10 @@ class MomentMatchingForHedging(StochModel): # Instance of the abstract class Sto
         else:
             end_t = time.time()
             logging.info(f"Computational time to build the tree:{end_t - start_t} seconds")
+
+
+        '''stock_prices = make_arbitrage_free_states(parent_stock_prices, stock_prices, n_children)'''
+
         
         # Options values 
         option_prices = np.zeros((self.n_options, n_children))
