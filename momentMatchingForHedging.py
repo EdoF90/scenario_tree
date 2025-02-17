@@ -28,7 +28,7 @@ class MomentMatchingForHedging(StochModel): # Instance of the abstract class Sto
         self.option_list = option_list
         self.dt = dt
         self.risk_free_rate = r
-        self.mu = mu * self.dt 
+        self.mu = (mu - 1/2 * sigma**2) * dt 
         self.sigma = sigma * np.sqrt(self.dt)
         self.corr = rho
         self.skew = skew 

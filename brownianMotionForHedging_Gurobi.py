@@ -190,7 +190,7 @@ class BrownianMotionForHedging_Gurobi(StochModel):
         j = underlying_index
 
         if dynamics == 'BS':
-            if number == 1: moment = self.mu[j] * self.dt
+            if number == 1: moment = (self.mu[j] - 1/2 * self.sigma[j]**2) * self.dt
             if number == 2: moment = self.sigma[j]**2 * self.dt + (self.mu[j] * self.dt)**2
             if number == -1: # E[j i], for i > j 
                 moment = []
